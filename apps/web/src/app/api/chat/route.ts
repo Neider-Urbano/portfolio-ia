@@ -5,6 +5,7 @@ import { runChatTurn } from "@/lib/llm";
 import { Profile, ChatLog, AnalyticsEvent } from "@portafolio/models";
 
 export const runtime = "nodejs"; // necesita el SDK de Anthropic y el cliente MCP (no Edge)
+export const maxDuration = 60; // el MCP server puede tardar en despertar (cold start) + turnos de Gemini
 
 const bodySchema = z.object({
   sessionId: z.string().min(1),
