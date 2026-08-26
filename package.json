@@ -1,0 +1,19 @@
+{
+  "name": "portafolio-ia",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Portafolio interactivo basado en IA — monorepo (web + mcp-server + models compartidos)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:mcp": "npm run dev --workspace=apps/mcp-server",
+    "build:models": "npm run build --workspace=packages/models",
+    "build:mcp": "npm run build --workspace=apps/mcp-server",
+    "build:web": "npm run build --workspace=apps/web",
+    "build": "npm run build:models && npm run build:mcp && npm run build:web",
+    "seed": "npm run seed --workspace=apps/mcp-server"
+  }
+}
