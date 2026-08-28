@@ -36,3 +36,6 @@ export type { IAdminUser } from "./AdminUser";
 
 export { computePortfolioStats, calculateAge } from "./stats";
 export type { PortfolioStats } from "./stats";
+
+export { getFullProfile } from "./resume";
+export type { FullProfile } from "./resume";

@@ -1,6 +1,11 @@
 import { Schema, model, models, type Document, type Model } from "mongoose";
 
-export type AnalyticsEventType = "page_view" | "project_view" | "chat_question" | "resume_download";
+export type AnalyticsEventType =
+  | "page_view"
+  | "project_view"
+  | "chat_question"
+  | "resume_download"
+  | "contact_message";
 
 export interface IAnalyticsEvent extends Document {
   type: AnalyticsEventType;
@@ -16,7 +21,7 @@ const AnalyticsEventSchema = new Schema<IAnalyticsEvent>(
   {
     type: {
       type: String,
-      enum: ["page_view", "project_view", "chat_question", "resume_download"],
+      enum: ["page_view", "project_view", "chat_question", "resume_download", "contact_message"],
       required: true,
     },
     path: String,

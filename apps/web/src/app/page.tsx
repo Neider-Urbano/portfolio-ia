@@ -21,6 +21,7 @@ import { CountUp } from "@/components/home/CountUp";
 import { SpeakIntro } from "@/components/home/SpeakIntro";
 import { WelcomeModal } from "@/components/home/WelcomeModal";
 import { CommentForm } from "@/components/home/CommentForm";
+import { ResumeLink } from "@/components/home/ResumeLink";
 import { Orb } from "@/components/voice/Orb";
 import { Waveform } from "@/components/voice/Waveform";
 import {
@@ -99,6 +100,7 @@ export default async function HomePage() {
           >
             Ver todo ↓
           </a>
+          {profile?.resumeUrl && <ResumeLink href={profile.resumeUrl} />}
           <SpeakIntro name={profile?.fullName} headline={profile?.headline} bio={profile?.bio} />
         </div>
 

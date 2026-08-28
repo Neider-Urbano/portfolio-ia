@@ -8,6 +8,7 @@ import { getGalleryTool } from "./getGallery";
 import { getReferencesTool } from "./getReferences";
 import { getServicesTool } from "./getServices";
 import { getPortfolioStatsTool } from "./getPortfolioStats";
+import { getFullProfileTool } from "./getFullProfile";
 import type { ToolDefinition } from "./types";
 
 const allTools: ToolDefinition<any>[] = [
@@ -20,6 +21,7 @@ const allTools: ToolDefinition<any>[] = [
   getReferencesTool,
   getServicesTool,
   getPortfolioStatsTool,
+  getFullProfileTool,
 ];
 
 /**

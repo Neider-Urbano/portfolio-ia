@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type Theme = "light" | "dark";
 
@@ -10,7 +11,10 @@ type Theme = "light" | "dark";
  * este componente solo lee ese estado en el cliente y lo persiste.
  */
 export function ThemeToggle() {
+  const pathname = usePathname();
   const [theme, setTheme] = useState<Theme | null>(null);
+
+  if (pathname.startsWith("/cv")) return null;
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme") as Theme | null;

@@ -227,13 +227,22 @@ export default function AdminProfilePage() {
           />
         </Field>
 
-        <Field label="URL del CV/resume">
+        <Field label="URL del CV/resume (esto es lo que descargan los visitantes del sitio)">
           <input
             value={form.resumeUrl}
             onChange={(e) => handleChange("resumeUrl", e.target.value)}
             className={inputClass}
           />
         </Field>
+
+        <a
+          href="/cv"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-signal hover:underline"
+        >
+          Ver mi CV generado en HTML (con foto) para imprimir/guardar como PDF ↗
+        </a>
 
         <Field label="Enlaces sociales (formato: plataforma:url, separados por coma)">
           <input

@@ -236,3 +236,16 @@ body {
 :root.dark .map-frame {
   filter: invert(92%) hue-rotate(180deg) brightness(0.95) contrast(0.9);
 }
+
+/* Página de CV (/cv): márgenes reales de impresión y fondo blanco garantizado
+   incluso si el navegador tiene "imprimir gráficos de fondo" activado — el
+   resto de la reducción a blanco y negro vive en las clases `print:` de la
+   propia página. */
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+  body {
+    background: #fff;
+  }
+}

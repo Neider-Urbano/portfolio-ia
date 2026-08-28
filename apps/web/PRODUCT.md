@@ -30,10 +30,13 @@ Unlike a static portfolio site, visitors can ask an AI agent free-form questions
 
 ## Capabilities and Constraints
 
-- Confirmed stack: Next.js 14 (App Router) + Tailwind CSS, MongoDB via Mongoose, Google Gemini API for the chat agent, a standalone Node/Express MCP server exposing DB-backed tools to the chat.
+- Confirmed stack: Next.js 14 (App Router) + Tailwind CSS, MongoDB via Mongoose, Google Gemini API for the chat agent (with Groq and OpenRouter as automatic cloud fallbacks when Gemini fails — same tool-calling contract, see `lib/llm.ts`), a standalone Node/Express MCP server exposing DB-backed tools to the chat.
 - Auth: NextAuth Credentials provider, single admin user.
-- Images are referenced by pasted URL by design (no upload pipeline) — confirmed decision, not a gap to fill visually.
+- Images and the résumé/CV file are referenced by pasted URL by design (no upload pipeline) — confirmed decision, reaffirmed explicitly for the CV specifically, not a gap to fill.
 - Real content has since been entered through the admin dashboard (real name, headline, bio, projects) — the database is no longer placeholder/seed data. Contact info was set directly by the assistant on the owner's request: email `julianur012b@gmail.com`, WhatsApp `+573204524545` (rendered as a `mailto:` and a `wa.me` link on the public site).
+- `GET /api/resume` is a public, unauthenticated endpoint that returns the entire public profile (profile, experience, education, skills, projects, services, references, gallery) as one JSON payload. `/cv` reads from it too. The same aggregation now also ships as an MCP tool, `get_full_profile` (in `apps/mcp-server`) — for external MCP clients (n8n, other agents) that want the whole profile in one call instead of chaining the per-topic tools. Both share one function, `getFullProfile()` in `@portafolio/models` (`packages/models/src/resume.ts`), so REST and MCP never drift out of sync. Neither ever exposes `aiPersona` or the raw `birthDate` (only the computed age) — the schema has no password/credential/banking fields to begin with, so there is nothing sensitive to filter beyond that.
+- `/cv` is a printable résumé page: on-screen it carries the site's Modo Voz identity, but resolves to clean black-on-white typography under `print:` classes / `@media print` — "download" is the browser's native print-to-PDF via `window.print()`, not a server-rendered PDF (no extra dependency, works on Vercel serverless without a headless-browser function). A `resume_download` analytics event fires on click.
+- The contact form (`ContactForm`, `POST /api/contact`) sends an email via Resend (`RESEND_API_KEY`, optional — the route fails honestly with a 503 instead of claiming success when unset) and, best-effort, a WhatsApp notification to the owner's own number via CallMeBot (`CALLMEBOT_APIKEY`, optional, silently skipped when unset). Both channels are independent and optional; CallMeBot only ever notifies the owner, it is not a two-way chat channel. This supplements, not replaces, the existing direct `mailto:`/`wa.me` buttons.
 
 ## Brand Commitments
 

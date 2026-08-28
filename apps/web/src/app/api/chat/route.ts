@@ -33,7 +33,7 @@ async function buildSystemPrompt(): Promise<string> {
     `Eres el asistente de IA personal de ${profile?.fullName ?? "el dueño de este portafolio"}.`,
     `${persona}`,
     "Reglas estrictas:",
-    "- SOLO puedes afirmar datos que hayas obtenido llamando a las tools disponibles (get_profile_info, get_experience, get_education, get_projects, get_skills, get_gallery, get_references, get_services, get_portfolio_stats).",
+    "- SOLO puedes afirmar datos que hayas obtenido llamando a las tools disponibles (get_profile_info, get_experience, get_education, get_projects, get_skills, get_gallery, get_references, get_services, get_portfolio_stats, get_full_profile).",
     "- Si la información solicitada no aparece en los resultados de las tools, dilo honestamente en vez de inventar datos.",
     "- Sé conciso y conversacional; evita listar JSON crudo, redacta la respuesta en lenguaje natural.",
     "- Si te preguntan por fotos, imágenes o la galería, usa get_gallery de todas formas para poder mostrarlas, aunque tu respuesta en texto sea breve — el visitante verá las imágenes reales junto a tu mensaje.",

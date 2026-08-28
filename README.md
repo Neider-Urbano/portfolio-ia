@@ -179,18 +179,18 @@ portafolio/
 
 Todos los schemas están en `packages/models/src/*.ts`. Resumen:
 
-| Colección | Propósito |
-|---|---|
-| `Profile` | Datos personales, bio, contacto, `aiPersona` (instrucciones de tono para el LLM) |
-| `Experience` | Historial laboral (empresa, cargo, fechas, tecnologías) |
-| `Education` | Estudios formales, certificaciones y cursos |
-| `Project` | Proyectos con imágenes, links, tecnologías, `viewCount` |
-| `Skill` | Habilidades técnicas/blandas con nivel de dominio |
-| `GalleryItem` | Fotos con etiquetas |
-| `Reference` | Testimonios/referencias profesionales |
-| `ChatLog` | Cada pregunta/respuesta del chat (para FAQ y auditoría) |
+| Colección        | Propósito                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `Profile`        | Datos personales, bio, contacto, `aiPersona` (instrucciones de tono para el LLM)      |
+| `Experience`     | Historial laboral (empresa, cargo, fechas, tecnologías)                               |
+| `Education`      | Estudios formales, certificaciones y cursos                                           |
+| `Project`        | Proyectos con imágenes, links, tecnologías, `viewCount`                               |
+| `Skill`          | Habilidades técnicas/blandas con nivel de dominio                                     |
+| `GalleryItem`    | Fotos con etiquetas                                                                   |
+| `Reference`      | Testimonios/referencias profesionales                                                 |
+| `ChatLog`        | Cada pregunta/respuesta del chat (para FAQ y auditoría)                               |
 | `AnalyticsEvent` | Eventos de analítica: `page_view`, `project_view`, `chat_question`, `resume_download` |
-| `AdminUser` | Credenciales del dashboard (password hasheado con bcrypt) |
+| `AdminUser`      | Credenciales del dashboard (password hasheado con bcrypt)                             |
 
 `packages/models/src/stats.ts` agrega una función (no un schema): `computePortfolioStats()`
 calcula "el perfil en números" (años de experiencia, cantidad de proyectos, tecnologías
@@ -290,7 +290,7 @@ un proyecto, para no mezclar exploraciones del LLM con vistas reales).
 **`apps/mcp-server/.env`** (ver `.env.example`):
 
 ```
-PORT=4001
+PORT=4002
 MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/portafolio
 MCP_API_KEY=<secreto largo y aleatorio>
 ```
@@ -301,7 +301,7 @@ MCP_API_KEY=<secreto largo y aleatorio>
 MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/portafolio
 GEMINI_API_KEY=xxxxxxxxxxxxxxxx
 GEMINI_MODEL=gemini-2.0-flash
-MCP_SERVER_URL=http://localhost:4001/mcp
+MCP_SERVER_URL=http://localhost:4002/mcp
 MCP_API_KEY=<el mismo secreto que en mcp-server>
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=<generar con: openssl rand -base64 32>

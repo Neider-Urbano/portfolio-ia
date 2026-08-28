@@ -6,11 +6,14 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { connectDB } from "./db";
 import { registerAllTools } from "./tools";
 
-const PORT = Number(process.env.PORT ?? 4001);
+const PORT = Number(process.env.PORT ?? 4002);
 const MCP_API_KEY = process.env.MCP_API_KEY; // secreto compartido con apps/web
 
 function buildServer(): McpServer {
-  const server = new McpServer({ name: "portafolio-mcp-server", version: "1.0.0" });
+  const server = new McpServer({
+    name: "portafolio-mcp-server",
+    version: "1.0.0",
+  });
   registerAllTools(server);
   return server;
 }
@@ -38,7 +41,9 @@ async function main() {
   // que hace la ruta /api/chat de Next.js en cada turno de conversación.
   app.post("/mcp", async (req, res) => {
     const server = buildServer();
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
 
     res.on("close", () => {
       transport.close();
