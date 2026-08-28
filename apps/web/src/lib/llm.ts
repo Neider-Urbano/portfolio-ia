@@ -56,6 +56,7 @@ const STATUS_LABELS: Record<string, string> = {
   get_references: "Consultando referencias...",
   get_services: "Consultando servicios...",
   get_portfolio_stats: "Calculando estadísticas del portafolio...",
+  get_blogs: "Revisando artículos guardados...",
 };
 
 function statusLabel(toolName: string): string {
@@ -128,8 +129,11 @@ interface TurnParams {
 // ver getFullProfileTool en apps/mcp-server); si se la mandáramos al LLM
 // como función disponible, un visitante podría lograr que la llame con solo
 // pedírselo, sin importar lo que diga el system prompt — la única barrera
-// real es que el modelo ni siquiera sepa que la tool existe.
-const PUBLIC_CHAT_EXCLUDED_TOOLS = new Set(["get_full_profile"]);
+// real es que el modelo ni siquiera sepa que la tool existe. create_blog es
+// la única tool de ESCRITURA del servidor (la usa una automatización de
+// n8n para registrar artículos) — un visitante jamás debe poder crear
+// contenido en la base con solo pedírselo al chat.
+const PUBLIC_CHAT_EXCLUDED_TOOLS = new Set(["get_full_profile", "create_blog"]);
 
 export async function* runChatTurn(params: TurnParams): AsyncGenerator<ChatEvent> {
   const mcpTools = (await listMcpTools()).filter((t) => !PUBLIC_CHAT_EXCLUDED_TOOLS.has(t.name));

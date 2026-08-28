@@ -25,6 +25,9 @@ export type { IService } from "./Service";
 export { default as Preference } from "./Preference";
 export type { IPreference } from "./Preference";
 
+export { default as Blog } from "./Blog";
+export type { IBlog } from "./Blog";
+
 export { default as Comment } from "./Comment";
 export type { IComment } from "./Comment";
 
