@@ -20,6 +20,7 @@ const profileSchema = z.object({
   aiPersona: z.string().optional().or(z.literal("")),
   birthDate: z.string().optional().or(z.literal("")),
   hobbies: z.array(z.string()).default([]),
+  languages: z.array(z.string()).default([]),
 });
 
 export async function GET() {

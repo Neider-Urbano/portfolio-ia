@@ -48,6 +48,7 @@ export async function getFullProfile() {
       yearsOfExperience: profile.yearsOfExperience,
       age: profile.birthDate ? calculateAge(profile.birthDate) : undefined,
       hobbies: profile.hobbies,
+      languages: profile.languages,
       socialLinks: profile.socialLinks,
       resumeUrl: profile.resumeUrl,
     },

@@ -14,6 +14,7 @@ export interface IProfile extends Document {
   aiPersona?: string; // instrucciones de tono/estilo que el LLM debe usar al "ser" este perfil
   birthDate?: Date; // privado: solo se expone la edad calculada, nunca esta fecha
   hobbies: string[];
+  languages: string[]; // ej. "Español (nativo)", "Inglés (intermedio)" — público, mismo patrón que hobbies
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +40,7 @@ const ProfileSchema = new Schema<IProfile>(
     aiPersona: String,
     birthDate: Date,
     hobbies: [{ type: String }],
+    languages: [{ type: String }],
   },
   { timestamps: true }
 );

@@ -31,6 +31,7 @@ import {
   IconService,
   IconSparkle,
   IconHobby,
+  IconLanguage,
   IconImage,
   IconComment,
   IconLocation,
@@ -264,6 +265,22 @@ export default async function HomePage() {
               >
                 <IconHobby className="h-3.5 w-3.5 text-signal" />
                 {h}
+              </span>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {profile?.languages && profile.languages.length > 0 && (
+        <Section id="idiomas" icon={<IconLanguage className="h-5 w-5" />} title="Idiomas">
+          <div className="flex flex-wrap gap-2">
+            {profile.languages.map((l) => (
+              <span
+                key={l}
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-panel px-3.5 py-1.5 text-sm text-ink"
+              >
+                <IconLanguage className="h-3.5 w-3.5 text-signal" />
+                {l}
               </span>
             ))}
           </div>

@@ -25,13 +25,31 @@ async function main() {
   app.use(cors());
   app.use(express.json());
 
-  // Autenticación simple entre apps/web (cliente MCP) y este servidor.
-  // El servidor NUNCA se expone directamente al navegador del visitante.
+  // Autenticación simple. Acepta DOS formas del mismo secreto:
+  // - "x-mcp-api-key: <key>" — la que usa apps/web, un header custom.
+  // - "Authorization: Bearer <key>" — el header estándar, para clientes
+  //   como el conector remoto de Claude, cuya UI para agregar un servidor
+  //   MCP suele tener un campo único de "API key"/token y arma ella misma
+  //   un Authorization: Bearer, sin dar forma de elegir el nombre del
+  //   header — no hay nada que "agregar" ahí salvo pegar la key.
   app.use("/mcp", (req, res, next) => {
-    if (MCP_API_KEY && req.header("x-mcp-api-key") !== MCP_API_KEY) {
+    const bearer = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+    const providedKey = req.header("x-mcp-api-key") ?? bearer;
+    if (MCP_API_KEY && providedKey !== MCP_API_KEY) {
       res.status(401).json({ error: "No autorizado" });
       return;
     }
+    next();
+  });
+
+  // StreamableHTTPServerTransport exige que el cliente mande
+  // "Accept: application/json, text/event-stream" exacto — si falta
+  // cualquiera de los dos, responde 406 antes de llegar a auth/tools. No
+  // todos los clientes MCP (Claude incluido, en algunas integraciones) lo
+  // mandan así por defecto, así que lo forzamos acá: da igual lo que haya
+  // pedido el cliente, este servidor siempre sabe responder ambos formatos.
+  app.use("/mcp", (req, _res, next) => {
+    req.headers.accept = "application/json, text/event-stream";
     next();
   });
 
@@ -59,6 +77,19 @@ async function main() {
         res.status(500).json({ error: "Error interno del servidor MCP" });
       }
     }
+  });
+
+  // Este servidor corre en modo "stateless" (sin sessionId), así que no
+  // mantiene un stream SSE abierto por GET — algunos clientes MCP prueban
+  // GET /mcp antes o en vez de POST; se responde con el 405 + shape JSON-RPC
+  // que recomienda la spec, en vez del 404 HTML por default de Express, que
+  // varios clientes no saben interpretar.
+  app.get("/mcp", (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Method Not Allowed: this server is stateless, use POST /mcp" },
+      id: null,
+    });
   });
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));

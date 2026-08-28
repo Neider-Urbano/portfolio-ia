@@ -84,6 +84,15 @@ export function IconExternal({ className }: IconProps) {
   );
 }
 
+export function IconLanguage({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={`${base} ${className ?? ""}`} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a13 13 0 0 1 0 18 13 13 0 0 1 0-18Z" />
+    </svg>
+  );
+}
+
 export function IconGraduation({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={`${base} ${className ?? ""}`} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">

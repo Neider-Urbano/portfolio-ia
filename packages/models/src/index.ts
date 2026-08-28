@@ -22,6 +22,9 @@ export type { IReference } from "./Reference";
 export { default as Service } from "./Service";
 export type { IService } from "./Service";
 
+export { default as Preference } from "./Preference";
+export type { IPreference } from "./Preference";
+
 export { default as Comment } from "./Comment";
 export type { IComment } from "./Comment";
 

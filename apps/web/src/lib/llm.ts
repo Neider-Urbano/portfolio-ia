@@ -120,8 +120,19 @@ interface TurnParams {
  * en el contenido ni en la forma de la respuesta, porque los tres siguen
  * usando las mismas tools MCP contra los mismos datos reales.
  */
+// Tools que el mcp-server expone pero que el chat público del sitio NUNCA
+// debe poder llamar — quedan reservadas para integraciones externas de uso
+// personal del dueño (Claude conectado como MCP remoto, n8n), que hablan
+// directo con el mcp-server sin pasar por acá. get_full_profile incluye
+// preferencias privadas (estado civil, estrato, salario esperado, etc. —
+// ver getFullProfileTool en apps/mcp-server); si se la mandáramos al LLM
+// como función disponible, un visitante podría lograr que la llame con solo
+// pedírselo, sin importar lo que diga el system prompt — la única barrera
+// real es que el modelo ni siquiera sepa que la tool existe.
+const PUBLIC_CHAT_EXCLUDED_TOOLS = new Set(["get_full_profile"]);
+
 export async function* runChatTurn(params: TurnParams): AsyncGenerator<ChatEvent> {
-  const mcpTools = await listMcpTools();
+  const mcpTools = (await listMcpTools()).filter((t) => !PUBLIC_CHAT_EXCLUDED_TOOLS.has(t.name));
 
   if (params.messages.length === 0) {
     yield { type: "final", text: "", toolsUsed: [] };

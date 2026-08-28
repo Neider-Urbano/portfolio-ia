@@ -113,6 +113,12 @@ export default async function CvPage() {
           </CvSection>
         )}
 
+        {profile.languages && profile.languages.length > 0 && (
+          <CvSection title="Idiomas">
+            <p className="text-sm leading-relaxed text-ink-muted print:text-black/80">{profile.languages.join(" · ")}</p>
+          </CvSection>
+        )}
+
         {profile.hobbies && profile.hobbies.length > 0 && (
           <CvSection title="Hobbies">
             <p className="text-sm leading-relaxed text-ink-muted print:text-black/80">{profile.hobbies.join(" · ")}</p>

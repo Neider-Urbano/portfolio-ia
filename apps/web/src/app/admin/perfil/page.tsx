@@ -17,6 +17,7 @@ interface ProfileFormState {
   socialLinksText: string; // "github:https://... , linkedin:https://..."
   birthDate: string;
   hobbiesText: string; // "fotografía, ajedrez, senderismo"
+  languagesText: string; // "Español (nativo), Inglés (intermedio)"
 }
 
 const emptyState: ProfileFormState = {
@@ -33,6 +34,7 @@ const emptyState: ProfileFormState = {
   socialLinksText: "",
   birthDate: "",
   hobbiesText: "",
+  languagesText: "",
 };
 
 const inputClass =
@@ -65,6 +67,7 @@ export default function AdminProfilePage() {
             .join(", "),
           birthDate: p.birthDate ? String(p.birthDate).slice(0, 10) : "",
           hobbiesText: (p.hobbies ?? []).join(", "),
+          languagesText: (p.languages ?? []).join(", "),
         });
       }
       setLoading(false);
@@ -93,6 +96,11 @@ export default function AdminProfilePage() {
       .map((h) => h.trim())
       .filter(Boolean);
 
+    const languages = form.languagesText
+      .split(",")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
     const payload = {
       fullName: form.fullName,
       headline: form.headline,
@@ -107,6 +115,7 @@ export default function AdminProfilePage() {
       socialLinks,
       birthDate: form.birthDate || "",
       hobbies,
+      languages,
     };
 
     const res = await fetch("/api/admin/profile", {
@@ -215,6 +224,15 @@ export default function AdminProfilePage() {
             value={form.hobbiesText}
             onChange={(e) => handleChange("hobbiesText", e.target.value)}
             placeholder="fotografía, ajedrez, senderismo"
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Idiomas (separados por coma)">
+          <input
+            value={form.languagesText}
+            onChange={(e) => handleChange("languagesText", e.target.value)}
+            placeholder="Español (nativo), Inglés (intermedio)"
             className={inputClass}
           />
         </Field>
