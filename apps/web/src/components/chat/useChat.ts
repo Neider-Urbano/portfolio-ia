@@ -120,7 +120,15 @@ export function useChat() {
             if (event.type === "status") {
               setStatus(event.message);
             } else if (event.type === "tool_result") {
-              pendingImages.push(...extractImages(event.tool, event.data));
+              // dedup por url: si el backend cambió de Gemini a Groq a mitad
+              // de turno, la misma tool puede haberse ejecutado dos veces.
+              const seen = new Set(pendingImages.map((img) => img.url));
+              for (const img of extractImages(event.tool, event.data)) {
+                if (!seen.has(img.url)) {
+                  pendingImages.push(img);
+                  seen.add(img.url);
+                }
+              }
             } else if (event.type === "final") {
               setMessages((prev) => [
                 ...prev,
