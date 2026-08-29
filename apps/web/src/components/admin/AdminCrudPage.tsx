@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
 
 export type FieldType = "text" | "textarea" | "number" | "boolean" | "date" | "tags" | "select";
@@ -18,6 +18,10 @@ interface AdminCrudPageProps {
   title: string;
   fields: FieldConfig[];
   columns: string[];
+  /** Nombre del campo con una URL — agrega una acción "Abrir ↗" por fila. */
+  linkField?: string;
+  /** Nombres de campos a mostrar en una fila de detalle expandible (además de las columnas de la tabla). */
+  detailFields?: string[];
 }
 
 type Item = Record<string, any>;
@@ -79,7 +83,7 @@ function formatCell(value: unknown): string {
  * contra /api/admin/{resource} (GET/POST) y /api/admin/{resource}/[id]
  * (PUT/DELETE), que todas siguen la misma forma de respuesta { items }/{ item }.
  */
-export function AdminCrudPage({ resource, title, fields, columns }: AdminCrudPageProps) {
+export function AdminCrudPage({ resource, title, fields, columns, linkField, detailFields }: AdminCrudPageProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -87,6 +91,7 @@ export function AdminCrudPage({ resource, title, fields, columns }: AdminCrudPag
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -192,21 +197,60 @@ export function AdminCrudPage({ resource, title, fields, columns }: AdminCrudPag
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item._id} className="border-t border-line">
-                  {columns.map((c) => (
-                    <td key={c} className="px-4 py-2 text-ink">
-                      {formatCell(item[c])}
+                <Fragment key={item._id}>
+                  <tr className="border-t border-line">
+                    {columns.map((c) => (
+                      <td key={c} className="px-4 py-2 text-ink">
+                        {formatCell(item[c])}
+                      </td>
+                    ))}
+                    <td className="space-x-3 px-4 py-2 text-right font-mono text-xs uppercase tracking-wide">
+                      {detailFields && detailFields.length > 0 && (
+                        <button
+                          onClick={() => setExpandedId(expandedId === item._id ? null : item._id)}
+                          className="text-ink-muted hover:underline"
+                        >
+                          {expandedId === item._id ? "Ocultar" : "Detalle"}
+                        </button>
+                      )}
+                      {linkField && item[linkField] && (
+                        <a
+                          href={item[linkField]}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-signal hover:underline"
+                        >
+                          Abrir ↗
+                        </a>
+                      )}
+                      <button onClick={() => openEdit(item)} className="text-signal hover:underline">
+                        Editar
+                      </button>
+                      <button onClick={() => handleDelete(item._id)} className="text-ink-faint hover:underline">
+                        Eliminar
+                      </button>
                     </td>
-                  ))}
-                  <td className="space-x-3 px-4 py-2 text-right font-mono text-xs uppercase tracking-wide">
-                    <button onClick={() => openEdit(item)} className="text-signal hover:underline">
-                      Editar
-                    </button>
-                    <button onClick={() => handleDelete(item._id)} className="text-ink-faint hover:underline">
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
+                  </tr>
+                  {expandedId === item._id && detailFields && (
+                    <tr className="border-t border-line bg-console">
+                      <td colSpan={columns.length + 1} className="px-4 py-3">
+                        <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {detailFields.map((name) => {
+                            const field = fields.find((f) => f.name === name);
+                            return (
+                              <div key={name}>
+                                <dt className="font-mono text-[11px] uppercase tracking-wide text-ink-faint">
+                                  {field?.label ?? name}
+                                </dt>
+                                <dd className="text-sm text-ink-muted">{formatCell(item[name])}</dd>
+                              </div>
+                            );
+                          })}
+                        </dl>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

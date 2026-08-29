@@ -20,6 +20,8 @@ export default function AdminBlogsPage() {
       title="Blogs"
       fields={fields}
       columns={["title", "relevance", "reviewed"]}
+      linkField="url"
+      detailFields={["description", "source", "tags", "publishedDate"]}
     />
   );
 }
