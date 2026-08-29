@@ -11,7 +11,13 @@ import { getPortfolioStatsTool } from "./getPortfolioStats";
 import { getFullProfileTool } from "./getFullProfile";
 import { getBlogsTool } from "./getBlogs";
 import { createBlogTool } from "./createBlog";
+import { getOrSetCache } from "../cache";
 import type { ToolDefinition } from "./types";
+
+// Tools de ESCRITURA — nunca deben cachearse, cada llamada tiene que
+// ejecutar de verdad. Todo lo que no esté acá es una lectura pura y es
+// seguro cachearla (ver src/cache.ts).
+const NON_CACHEABLE_TOOLS = new Set(["create_blog"]);
 
 const allTools: ToolDefinition<any>[] = [
   getProfileInfoTool,
@@ -43,7 +49,9 @@ export function registerAllTools(server: McpServer): void {
       },
       async (args: any) => {
         try {
-          const result = await tool.handler(args);
+          const result = NON_CACHEABLE_TOOLS.has(tool.name)
+            ? await tool.handler(args)
+            : await getOrSetCache(`${tool.name}:${JSON.stringify(args ?? {})}`, () => tool.handler(args));
           return {
             content: [{ type: "text" as const, text: JSON.stringify(result) }],
           };
