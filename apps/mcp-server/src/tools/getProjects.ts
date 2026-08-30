@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Project } from "@portafolio/models";
+import { escapeRegex } from "../lib/escapeRegex";
 import type { ToolDefinition } from "./types";
 
 const inputSchema = {
@@ -26,7 +27,7 @@ export const getProjectsTool: ToolDefinition<typeof inputSchema> = {
     }
 
     const query: Record<string, unknown> = {};
-    if (technology) query.technologies = { $regex: new RegExp(technology, "i") };
+    if (technology) query.technologies = { $regex: new RegExp(escapeRegex(technology), "i") };
     if (typeof featured === "boolean") query.featured = featured;
 
     const projects = await Project.find(query)

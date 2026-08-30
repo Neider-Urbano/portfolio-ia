@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Blog } from "@portafolio/models";
+import { escapeRegex } from "../lib/escapeRegex";
 import type { ToolDefinition } from "./types";
 
 const inputSchema = {
@@ -21,7 +22,7 @@ export const getBlogsTool: ToolDefinition<typeof inputSchema> = {
   inputSchema,
   handler: async ({ tag, limit }) => {
     const query: Record<string, unknown> = { reviewed: true };
-    if (tag) query.tags = { $regex: new RegExp(tag, "i") };
+    if (tag) query.tags = { $regex: new RegExp(escapeRegex(tag), "i") };
 
     const blogs = await Blog.find(query)
       .sort({ relevance: -1, publishedDate: -1 })

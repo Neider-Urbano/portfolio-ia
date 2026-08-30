@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GalleryItem } from "@portafolio/models";
+import { escapeRegex } from "../lib/escapeRegex";
 import type { ToolDefinition } from "./types";
 
 const inputSchema = {
@@ -13,7 +14,7 @@ export const getGalleryTool: ToolDefinition<typeof inputSchema> = {
     "Obtiene ítems de la galería de fotos (eventos, charlas, equipo, etc.) con su descripción y etiquetas. Úsala cuando el visitante pregunte por fotos, eventos o participación en conferencias.",
   inputSchema,
   handler: async ({ tag, limit }) => {
-    const query = tag ? { tags: { $regex: new RegExp(tag, "i") } } : {};
+    const query = tag ? { tags: { $regex: new RegExp(escapeRegex(tag), "i") } } : {};
     const items = await GalleryItem.find(query)
       .sort({ order: 1, createdAt: -1 })
       .limit(limit ?? 15)

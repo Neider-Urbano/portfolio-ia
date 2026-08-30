@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Experience } from "@portafolio/models";
+import { escapeRegex } from "../lib/escapeRegex";
 import type { ToolDefinition } from "./types";
 
 const inputSchema = {
@@ -23,7 +24,7 @@ export const getExperienceTool: ToolDefinition<typeof inputSchema> = {
     "Obtiene el historial de experiencia laboral (empresas, cargos, fechas, descripción y tecnologías usadas). Si se pasa 'technology', filtra las experiencias que usaron esa tecnología y calcula el total de años de experiencia con ella. Úsala para preguntas como '¿dónde has trabajado?', '¿cuál fue tu último puesto?' o '¿cuántos años de experiencia tienes en Node.js?'.",
   inputSchema,
   handler: async ({ technology, limit }) => {
-    const query = technology ? { technologies: { $regex: new RegExp(technology, "i") } } : {};
+    const query = technology ? { technologies: { $regex: new RegExp(escapeRegex(technology), "i") } } : {};
 
     const experiences = await Experience.find(query)
       .sort({ startDate: -1 })

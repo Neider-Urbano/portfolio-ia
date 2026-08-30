@@ -3,6 +3,7 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { Profile, AnalyticsEvent } from "@portafolio/models";
 import { sendContactEmail, sendTelegramNotification } from "@/lib/notify";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // Público, sin auth: cualquier visitante puede escribir. El email es el
 // canal "requerido" (si falla, se le avisa al visitante); Telegram es un
@@ -18,6 +19,20 @@ const contactSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // Cada envío manda un email real (y opcionalmente un Telegram) — el más
+  // estricto de los cuatro límites, porque acá el costo es spam directo a
+  // tu bandeja, no solo cómputo.
+  const { allowed, retryAfterSeconds } = checkRateLimit(`contact:${getClientIp(req)}`, {
+    limit: 3,
+    windowMs: 10 * 60_000,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Mandaste varios mensajes seguidos, esperá un rato antes de volver a intentar." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+    );
+  }
+
   const parsed = contactSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // El SDK de Gemini no corre en el runtime Edge.
 export const runtime = "nodejs";
@@ -18,6 +19,17 @@ const MAX_AUDIO_BYTES = 10 * 1024 * 1024; // ~10 MB, de sobra para un audio cort
  * de falla por completo.
  */
 export async function POST(req: NextRequest) {
+  const { allowed, retryAfterSeconds } = checkRateLimit(`transcribe:${getClientIp(req)}`, {
+    limit: 15,
+    windowMs: 60_000,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Estás grabando muy rápido, esperá un momento." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+    );
+  }
+
   const formData = await req.formData().catch(() => null);
   const audio = formData?.get("audio");
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { runChatTurn } from "@/lib/llm";
 import { Profile, ChatLog, AnalyticsEvent } from "@portafolio/models";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs"; // necesita el SDK de Anthropic y el cliente MCP (no Edge)
 export const maxDuration = 60; // el MCP server puede tardar en despertar (cold start) + turnos de Gemini
@@ -43,6 +44,19 @@ async function buildSystemPrompt(): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  // Cada mensaje dispara llamadas a APIs de IA de pago (Gemini/Groq/OpenRouter)
+  // — sin límite, alguien podría hacer un loop y generarte una factura.
+  const { allowed, retryAfterSeconds } = checkRateLimit(`chat:${getClientIp(req)}`, {
+    limit: 15,
+    windowMs: 60_000,
+  });
+  if (!allowed) {
+    return new Response(JSON.stringify({ error: "Estás mandando mensajes muy rápido, esperá un momento." }), {
+      status: 429,
+      headers: { "Retry-After": String(retryAfterSeconds) },
+    });
+  }
+
   const json = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
