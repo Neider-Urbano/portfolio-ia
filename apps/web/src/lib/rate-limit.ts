@@ -52,3 +52,17 @@ export function getClientIp(req: Request): string {
   if (forwarded) return forwarded.split(",")[0].trim();
   return req.headers.get("x-real-ip") ?? "unknown";
 }
+
+/**
+ * Misma extracción que getClientIp, pero para el `req.headers` que entrega
+ * NextAuth dentro de `authorize()` — ahí no es un `Request` de Fetch API,
+ * sino un objeto plano (`Record<string, any>`). Usado por lib/auth.ts para
+ * frenar fuerza bruta en el login.
+ */
+export function getClientIpFromHeaderObject(headers: Record<string, unknown> | undefined): string {
+  const forwarded = headers?.["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded) return forwarded.split(",")[0].trim();
+  const real = headers?.["x-real-ip"];
+  if (typeof real === "string" && real) return real;
+  return "unknown";
+}

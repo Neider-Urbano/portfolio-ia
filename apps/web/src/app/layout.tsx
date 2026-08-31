@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Urbanist, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
+import { PostHogPageView } from "@/components/analytics/PostHogPageView";
 import { ThemeInitScript } from "@/components/theme/ThemeInitScript";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { DirectionContract } from "@/components/DirectionContract";
@@ -54,6 +55,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-console font-sans text-ink antialiased">
         <DirectionContract />
         <AnalyticsTracker />
+        <PostHogPageView />
         <div className="fixed right-4 top-4 z-50">
           <ThemeToggle />
         </div>
