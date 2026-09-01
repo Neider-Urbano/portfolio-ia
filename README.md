@@ -1,21 +1,68 @@
-# Portafolio Interactivo basado en IA
+# 🎙️ Portafolio Interactivo con IA
 
-Portafolio profesional donde el visitante puede explorar el perfil de forma tradicional
-o conversar con un asistente de IA que responde con datos reales, obtenidos en tiempo
-real de MongoDB a través de un servidor MCP (Model Context Protocol).
+**Portafolio full-stack propio, con un asistente de IA que responde preguntas sobre mi
+perfil usando datos reales — conectado en vivo a mi base de datos a través de
+[MCP (Model Context Protocol)](https://modelcontextprotocol.io), el mismo protocolo que
+usan herramientas como Claude para hablar con servicios externos.**
 
-## 1. Arquitectura y flujo de datos
+No es una plantilla de portafolio con un chatbot pegado encima. El chat, el CV, el blog
+curado y el dashboard admin comparten una única fuente de verdad en MongoDB, y todo el
+sitio está diseñado para sentirse como una conversación con una IA — no solo la sección
+del chat.
 
-Hay **tres piezas independientes** que se despliegan por separado:
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com)
+[![MCP](https://img.shields.io/badge/Model_Context_Protocol-SDK-8A2BE2)](https://modelcontextprotocol.io)
+[![Vercel](https://img.shields.io/badge/apps%2Fweb-Vercel-000000?logo=vercel)](https://vercel.com)
+[![Render](https://img.shields.io/badge/apps%2Fmcp--server-Render-46E3B7?logo=render)](https://render.com)
 
-- **`apps/web`** — Next.js: sitio público, dashboard admin y la ruta `/api/chat` (actúa
-  como **cliente MCP** y como cliente de la API de Google Gemini).
-- **`apps/mcp-server`** — Node.js/Express: **servidor MCP** que expone las tools
-  (`get_profile_info`, `get_experience`, ...) respaldadas por Mongoose. Nunca se expone
-  directamente al navegador del visitante — solo `apps/web` le habla, server-to-server,
-  con una API key compartida.
-- **`packages/models`** — Schemas de Mongoose compartidos entre ambas apps, para que el
-  esquema de datos sea una única fuente de verdad.
+## 🔗 Demo en vivo
+
+- **Sitio:** https://portfolio-frontend-dusky-psi.vercel.app
+- **Chat con IA:** https://portfolio-frontend-dusky-psi.vercel.app/chat
+
+> Preguntale al chat cosas como *"¿cuántos años de experiencia tenés en Node.js?"* o
+> *"¿qué proyectos destacás?"* — no improvisa: cada respuesta factual pasa por una tool
+> MCP que consulta MongoDB en tiempo real.
+
+## ✨ Funcionalidades
+
+- 🤖 **Chat con IA basado en datos reales** — nunca inventa: cada afirmación sobre
+  experiencia, proyectos o skills pasa por una tool MCP respaldada por MongoDB.
+- 🎙️ **Entrada por voz** en el chat, transcrita en el servidor vía Gemini (evita los
+  fallos frecuentes del reconocimiento de voz nativo del navegador fuera de EE. UU.).
+- 🔁 **Fallback automático entre 3 proveedores de LLM** (Gemini → OpenRouter → Groq) — si
+  uno falla o se queda sin cuota, el chat sigue funcionando sin que el visitante lo note.
+- ⌨️ **Comandos rápidos** en el chat (`/help` y similares) para respuestas instantáneas
+  sin gastar una llamada al LLM.
+- 📄 **CV descargable**: página HTML imprimible generada desde los propios datos del
+  perfil, más un endpoint público (`GET /api/resume`) que devuelve el perfil completo.
+- 📚 **Blogs curados**: lista de lecturas externas relevantes para el perfil profesional,
+  con un flujo de curación (una automatización externa vía n8n registra artículos nuevos
+  como borrador; el dueño los revisa y publica desde el dashboard).
+- 💬 **Contacto**: formulario en modal → email vía Resend + notificación instantánea por
+  Telegram, con protección anti-spam (honeypot).
+- 📊 **Dashboard admin completo**: CRUD de todo el contenido del sitio, analítica propia
+  (tráfico, preguntas frecuentes del chat, proyectos más vistos) + PostHog.
+- 🔒 **Seguridad real, no cosmética**: 2FA (TOTP), bloqueo de cuenta por fuerza bruta,
+  rate limiting, y una frontera explícita entre lo que puede usar el chat público y lo
+  que es solo para el dueño (ver [sección de seguridad](#-seguridad)).
+- 🎨 **Diseño propio ("Modo Voz")**: minimalista, guiado por iconos, pensado para que
+  todo el sitio —no solo el chat— se sienta como interactuar con un asistente de IA.
+
+## 🧠 Arquitectura
+
+Tres piezas independientes, desplegadas por separado:
+
+- **`apps/web`** (Next.js): sitio público, dashboard admin, y `/api/chat` — actúa como
+  **cliente MCP** y como cliente de los tres proveedores de LLM.
+- **`apps/mcp-server`** (Node/Express): **servidor MCP** que expone las tools respaldadas
+  por Mongoose. Nunca se expone al navegador del visitante — solo `apps/web` le habla,
+  server-to-server, con una API key compartida (también acepta `Authorization: Bearer`
+  para conectores externos como Claude).
+- **`packages/models`**: schemas de Mongoose compartidos entre ambas apps — una única
+  fuente de verdad para el esquema de datos.
 
 ```mermaid
 flowchart LR
@@ -24,294 +71,193 @@ flowchart LR
     end
 
     subgraph WebApp[apps/web — Next.js]
-        API_CHAT["/api/chat (Route Handler)"]
+        API_CHAT["/api/chat (SSE)"]
         API_CRUD["/api/admin/* (CRUD dashboard)"]
-        AUTH[NextAuth.js]
+        AUTH["NextAuth + 2FA (TOTP)"]
         MCPCLIENT[Cliente MCP]
     end
 
-    subgraph LLM[Google Gemini API]
-        CLAUDE[Gemini 2.0 Flash]
+    subgraph LLMs[LLMs, con fallback automático]
+        GEMINI[1. Gemini]
+        OR[2. OpenRouter]
+        GROQ[3. Groq]
     end
 
     subgraph MCPServer[apps/mcp-server — Servidor MCP]
-        TOOLS["Tools: get_profile_info, get_experience,\nget_projects, get_skills, get_education,\nget_gallery, get_references"]
+        TOOLS["Tools: get_profile_info, get_experience,\nget_projects, get_blogs, ..."]
+        CACHE[(Cache en memoria, 5 min)]
     end
 
     subgraph DB[(MongoDB)]
         MONGO[(Colecciones vía Mongoose)]
     end
 
-    UI -- "1. Pregunta del usuario" --> API_CHAT
-    API_CHAT -- "2. mensaje + historial + functionDeclarations" --> CLAUDE
-    CLAUDE -- "3. functionCall (ej. get_experience)" --> API_CHAT
-    API_CHAT -- "4. callTool() vía MCP (HTTP + API key)" --> MCPCLIENT
-    MCPCLIENT -- "5. JSON-RPC sobre HTTP" --> MCPServer
-    TOOLS -- "6. Query Mongoose" --> MONGO
-    MONGO -- "7. Resultado" --> TOOLS
-    TOOLS -- "8. resultado de la tool" --> MCPCLIENT
-    MCPCLIENT -- "9. functionResponse" --> CLAUDE
-    CLAUDE -- "10. Respuesta final en texto" --> API_CHAT
-    API_CHAT -- "11. Streaming SSE: status + respuesta" --> UI
+    UI -- "1. Pregunta del visitante" --> API_CHAT
+    API_CHAT -- "2. Turno del agente" --> GEMINI
+    GEMINI -. "si falla o se agota" .-> OR
+    OR -. "si falla también" .-> GROQ
+    GEMINI -- "3. tool call (ej. get_experience)" --> MCPCLIENT
+    MCPCLIENT -- "4. JSON-RPC sobre HTTP" --> TOOLS
+    TOOLS -- "5. Query Mongoose (o cache)" --> MONGO
+    TOOLS -.-> CACHE
+    MCPCLIENT -- "6. resultado de la tool" --> GEMINI
+    GEMINI -- "7. respuesta final en texto" --> API_CHAT
+    API_CHAT -- "8. Streaming SSE: status + respuesta" --> UI
     API_CHAT -. "log de pregunta/respuesta" .-> MONGO
 
     UI -- "Vista tradicional (SSR) + stats públicas" --> WebApp
-    WebApp -- "Lee todas las colecciones + computePortfolioStats()" --> MONGO
-    UI -. "page_view (AnalyticsTracker)" .-> WebApp
+    WebApp -- "Lee colecciones + computePortfolioStats()" --> MONGO
 
-    ADMIN[Tú, autenticado] --> AUTH
+    ADMIN[Vos, autenticado] --> AUTH
     AUTH --> API_CRUD
-    API_CRUD -- "CRUD" --> MONGO
+    API_CRUD -- "CRUD directo" --> MONGO
 ```
 
 **Puntos clave del diseño:**
 
-- El LLM **nunca inventa datos**: el `system prompt` de `/api/chat` le exige usar
-  las tools para cualquier afirmación factual sobre el perfil (ver
-  `apps/web/src/app/api/chat/route.ts`).
-- El bucle agente (`apps/web/src/lib/llm.ts`) va turno a turno: si Gemini pide una tool,
-  se ejecuta contra el MCP server y se le devuelve el resultado, hasta que responde con
-  texto final (con un límite de turnos como salvaguarda).
-- Cada vez que se ejecuta una tool se emite un evento `status` por streaming (SSE), que
-  el frontend traduce en indicadores como "Buscando en proyectos...".
-- El dashboard admin (`/admin`) lee y escribe Mongoose **directamente** (no pasa por MCP)
-  porque es un cliente de confianza y ya está protegido por NextAuth.
+- El LLM **nunca inventa datos**: el `system prompt` de `/api/chat` exige usar las tools
+  para cualquier afirmación factual (ver `apps/web/src/app/api/chat/route.ts`).
+- El bucle agente (`apps/web/src/lib/llm.ts`) va turno a turno, con un límite de turnos
+  como salvaguarda, y prueba los tres proveedores de LLM en orden ante cualquier fallo.
+- Cada tool ejecutada emite un evento `status` por streaming (SSE), que el frontend
+  traduce en indicadores tipo "Buscando en proyectos...".
+- El servidor MCP cachea en memoria el resultado de las tools de lectura por 5 minutos
+  (configurable), para no pegarle a MongoDB en preguntas repetidas.
+- El dashboard admin lee y escribe Mongoose **directamente** (no pasa por MCP) porque es
+  un cliente de confianza, ya protegido por NextAuth.
 
-## 2. Estructura de carpetas
+## 🛠️ Stack tecnológico
+
+| Capa               | Tecnología                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| Frontend / Backend  | Next.js 14 (App Router), TypeScript, Tailwind CSS                          |
+| IA / Chat           | Google Gemini · OpenRouter · Groq (fallback en cadena), MCP SDK             |
+| Base de datos       | MongoDB + Mongoose (`packages/models`, schemas compartidos)                 |
+| Servidor MCP        | Node.js + Express + `@modelcontextprotocol/sdk`                             |
+| Autenticación       | NextAuth (Credentials) + bcrypt + 2FA (TOTP, `otpauth`)                     |
+| Notificaciones      | Resend (email), Telegram Bot API                                            |
+| Analítica           | Sistema propio (MongoDB) + PostHog                                          |
+| Infraestructura     | Vercel (`apps/web`) · Render (`apps/mcp-server`) · MongoDB Atlas            |
+
+## 🔒 Seguridad
+
+Pensado como un sistema real, no como una demo — algunos puntos concretos:
+
+- **Un solo admin**, contraseña con `bcrypt`, sesión JWT acotada a 12h.
+- **2FA opcional (TOTP)** desde `/admin/seguridad`: para desactivarlo hace falta el
+  código vigente, no alcanza con robar la sesión del navegador.
+- **Rate limiting** en memoria en todos los endpoints públicos de escritura (`/api/chat`,
+  `/api/contact`, `/api/comments`, `/api/transcribe`) y en el login / 2FA.
+- **Bloqueo de cuenta** tras varios intentos de login fallidos seguidos.
+- **Sin ReDoS**: los argumentos de las tools que arman un `$regex` de MongoDB (filtros
+  por tecnología, tag, etc.) se escapan antes de construir la expresión regular.
+- **Frontera explícita entre tools públicas y privadas del MCP server**: `get_full_profile`
+  (perfil completo + preferencias privadas) y `create_blog` (escritura) nunca llegan al
+  chat público — se filtran del lado del cliente antes de que el LLM sepa que existen,
+  no solo se le pide "por las buenas" en el prompt que no las use.
+- El servidor MCP **nunca** se expone directo al navegador del visitante.
+
+## 🗂️ Estructura del proyecto
 
 ```
 portafolio/
-├── package.json                 # workspaces raíz (npm workspaces)
 ├── packages/
-│   └── models/                  # Mongoose schemas compartidos
+│   └── models/                  # Schemas de Mongoose compartidos
 │       └── src/
-│           ├── Profile.ts
-│           ├── Experience.ts
-│           ├── Education.ts
-│           ├── Project.ts
-│           ├── Skill.ts
-│           ├── GalleryItem.ts
-│           ├── Reference.ts
-│           ├── ChatLog.ts       # historial de conversaciones (para analíticas/FAQ)
-│           ├── AnalyticsEvent.ts
-│           ├── AdminUser.ts
+│           ├── Profile.ts / Experience.ts / Education.ts / Project.ts
+│           ├── Skill.ts / GalleryItem.ts / Reference.ts / Service.ts
+│           ├── Comment.ts / Blog.ts / Preference.ts (privado)
+│           ├── ChatLog.ts / AnalyticsEvent.ts / AdminUser.ts
+│           ├── resume.ts        # getFullProfile() — agregación del perfil público
+│           ├── stats.ts         # computePortfolioStats()
 │           └── index.ts
 ├── apps/
-│   ├── mcp-server/              # Servidor MCP standalone (Node + Express)
+│   ├── mcp-server/               # Servidor MCP standalone (Node + Express)
 │   │   └── src/
-│   │       ├── db.ts
-│   │       ├── index.ts         # bootstrap: McpServer + StreamableHTTPServerTransport
-│   │       ├── seed.ts          # datos de prueba
-│   │       └── tools/
-│   │           ├── types.ts
-│   │           ├── getProfileInfo.ts
-│   │           ├── getExperience.ts
-│   │           ├── getEducation.ts
-│   │           ├── getProjects.ts
-│   │           ├── getSkills.ts
-│   │           ├── getGallery.ts
-│   │           ├── getReferences.ts
-│   │           ├── getPortfolioStats.ts # métricas agregadas (años, cursos, tecnologías...)
-│   │           └── index.ts     # registro central de tools
-│   └── web/                     # Next.js (App Router)
+│   │       ├── index.ts          # bootstrap: McpServer + StreamableHTTPServerTransport
+│   │       ├── cache.ts          # cache en memoria de resultados de tools (TTL)
+│   │       ├── lib/escapeRegex.ts
+│   │       └── tools/            # get_profile_info, get_experience, get_projects,
+│   │                              # get_skills, get_education, get_gallery,
+│   │                              # get_references, get_services, get_portfolio_stats,
+│   │                              # get_blogs, create_blog, get_full_profile
+│   └── web/                      # Next.js (App Router)
 │       └── src/
 │           ├── app/
-│           │   ├── page.tsx             # Home pública: vista tradicional COMPLETA
-│           │   │                        # (perfil, stats públicas, proyectos, experiencia,
-│           │   │                        #  estudios, skills, galería, referencias)
-│           │   ├── proyectos/[slug]/page.tsx  # Detalle de un proyecto (dispara project_view)
-│           │   ├── chat/page.tsx        # Vista chatbot IA
-│           │   ├── admin/
-│           │   │   ├── layout.tsx       # sidebar de navegación + logout
-│           │   │   ├── page.tsx         # Dashboard: stats del perfil + tráfico/engagement
-│           │   │   ├── login/page.tsx
-│           │   │   ├── perfil/page.tsx      # form singleton (GET/PUT /api/admin/profile)
-│           │   │   ├── proyectos/page.tsx   # AdminCrudPage(resource="projects")
-│           │   │   ├── experiencia/page.tsx # AdminCrudPage(resource="experience")
-│           │   │   ├── estudios/page.tsx    # AdminCrudPage(resource="education")
-│           │   │   ├── skills/page.tsx      # AdminCrudPage(resource="skills")
-│           │   │   ├── galeria/page.tsx     # AdminCrudPage(resource="gallery")
-│           │   │   └── referencias/page.tsx # AdminCrudPage(resource="references")
+│           │   ├── page.tsx              # Home pública (vista tradicional completa)
+│           │   ├── chat/page.tsx         # Vista chatbot IA
+│           │   ├── cv/page.tsx           # CV imprimible (solo accesible desde admin)
+│           │   ├── proyectos/[slug]/     # Detalle de proyecto
+│           │   ├── admin/                # Dashboard: perfil, experiencia, estudios,
+│           │   │                          # proyectos, skills, galería, referencias,
+│           │   │                          # servicios, comentarios, blogs,
+│           │   │                          # preferencias (privado), seguridad (2FA)
 │           │   └── api/
-│           │       ├── chat/route.ts            # orquesta LLM + MCP (streaming SSE)
+│           │       ├── chat/route.ts             # orquesta LLM + MCP (streaming SSE)
+│           │       ├── transcribe/route.ts        # voz → texto vía Gemini
+│           │       ├── resume/route.ts            # GET público, perfil completo
+│           │       ├── contact/route.ts           # Resend + Telegram
+│           │       ├── comments/route.ts
+│           │       ├── analytics/track/route.ts
 │           │       ├── auth/[...nextauth]/route.ts
-│           │       ├── analytics/track/route.ts # tracking público (page_view, etc.)
-│           │       └── admin/
-│           │           ├── profile/route.ts             # GET/PUT (singleton)
-│           │           ├── projects/route.ts (+ [id])    # GET/POST/PUT/DELETE
-│           │           ├── experience/route.ts (+ [id])
-│           │           ├── education/route.ts (+ [id])
-│           │           ├── skills/route.ts (+ [id])
-│           │           ├── gallery/route.ts (+ [id])
-│           │           └── references/route.ts (+ [id])
+│           │       └── admin/                     # CRUD de cada colección + security/2fa/*
 │           ├── components/
-│           │   ├── chat/
-│           │   │   ├── ChatWindow.tsx
-│           │   │   └── useChat.ts
-│           │   ├── admin/
-│           │   │   └── AdminCrudPage.tsx    # tabla + form modal genéricos, reusados
-│           │   │                            # por las 6 páginas CRUD de arriba
-│           │   └── analytics/
-│           │       ├── AnalyticsTracker.tsx # dispara "page_view" en cada navegación pública
-│           │       └── ProjectViewTracker.tsx # dispara "project_view" en /proyectos/[slug]
+│           │   ├── chat/         # ChatWindow, useChat, comandos rápidos
+│           │   ├── home/         # ContactActions (modal), ResumeLink, secciones
+│           │   ├── admin/        # AdminCrudPage genérico (tabla + form modal)
+│           │   └── analytics/    # AnalyticsTracker, PostHogPageView
 │           ├── lib/
-│           │   ├── db.ts             # conexión Mongoose cacheada (Next.js)
-│           │   ├── auth.ts           # config NextAuth (Credentials + AdminUser)
-│           │   ├── require-admin.ts  # helper de sesión compartido por las rutas /api/admin/*
-│           │   ├── session.ts        # sessionId de visitante (localStorage), compartido
-│           │   │                     # entre el chat y el tracker de analíticas
+│           │   ├── auth.ts           # NextAuth: password + rate limit + lockout + 2FA
+│           │   ├── totp.ts           # helpers TOTP compartidos
+│           │   ├── rate-limit.ts     # limitador en memoria por IP
+│           │   ├── llm.ts            # bucle agente: Gemini → OpenRouter → Groq
 │           │   ├── mcp-client.ts     # cliente MCP (listTools / callTool)
-│           │   └── llm.ts            # bucle agente con Gemini + tools MCP
-│           ├── middleware.ts        # protege /admin y /api/admin
-│           └── scripts/create-admin.ts
-└── .gitignore
+│           │   ├── notify.ts         # Resend + Telegram
+│           │   ├── posthog-client.ts
+│           │   └── require-admin.ts  # guard de sesión para /api/admin/*
+│           └── middleware.ts         # protege /admin y /api/admin
+└── package.json                  # workspaces raíz (npm workspaces)
 ```
 
-> Las 6 páginas CRUD del dashboard (`proyectos`, `experiencia`, `estudios`, `skills`,
-> `galeria`, `referencias`) son delgadas: solo declaran sus campos (`FieldConfig[]`) y
-> columnas, y renderizan `<AdminCrudPage resource="..." fields={...} columns={...} />`.
-> Toda la lógica de listar/crear/editar/borrar vive una sola vez en
-> `components/admin/AdminCrudPage.tsx`. `Profile` es la excepción: al ser un documento
-> único (singleton), tiene su propio formulario en `admin/perfil/page.tsx` en vez de
-> pasar por el componente de lista.
+## 🧩 Modelos de datos
 
-## 3. Modelos de datos
+Todos los schemas están en `packages/models/src/*.ts`:
 
-Todos los schemas están en `packages/models/src/*.ts`. Resumen:
+| Colección        | Propósito                                                                        |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `Profile`         | Datos personales, bio, contacto, idiomas, `aiPersona` (tono para el LLM)         |
+| `Experience`      | Historial laboral (empresa, cargo, fechas, tecnologías)                          |
+| `Education`       | Estudios formales, certificaciones y cursos                                      |
+| `Project`         | Proyectos con imágenes, links, tecnologías, `viewCount`                          |
+| `Skill`           | Habilidades técnicas/blandas con nivel de dominio                                |
+| `GalleryItem`     | Fotos con etiquetas                                                              |
+| `Reference`       | Testimonios/referencias profesionales                                            |
+| `Service`         | Servicios profesionales ofrecidos                                                |
+| `Comment`         | Comentarios de visitantes (moderados antes de publicarse)                        |
+| `Blog`            | Lecturas externas curadas, con flujo de revisión (`reviewed`)                    |
+| `Preference`      | **Privado** — equipos, música, comida, estado civil, salario esperado, etc.       |
+| `ChatLog`         | Historial de preguntas/respuestas del chat (FAQ y auditoría)                     |
+| `AnalyticsEvent`  | `page_view`, `project_view`, `chat_question`, `resume_download`, `contact_message`|
+| `AdminUser`       | Credenciales del dashboard (bcrypt) + estado de 2FA (TOTP)                        |
 
-| Colección        | Propósito                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| `Profile`        | Datos personales, bio, contacto, `aiPersona` (instrucciones de tono para el LLM)      |
-| `Experience`     | Historial laboral (empresa, cargo, fechas, tecnologías)                               |
-| `Education`      | Estudios formales, certificaciones y cursos                                           |
-| `Project`        | Proyectos con imágenes, links, tecnologías, `viewCount`                               |
-| `Skill`          | Habilidades técnicas/blandas con nivel de dominio                                     |
-| `GalleryItem`    | Fotos con etiquetas                                                                   |
-| `Reference`      | Testimonios/referencias profesionales                                                 |
-| `ChatLog`        | Cada pregunta/respuesta del chat (para FAQ y auditoría)                               |
-| `AnalyticsEvent` | Eventos de analítica: `page_view`, `project_view`, `chat_question`, `resume_download` |
-| `AdminUser`      | Credenciales del dashboard (password hasheado con bcrypt)                             |
+## 🔌 Tools del servidor MCP
 
-`packages/models/src/stats.ts` agrega una función (no un schema): `computePortfolioStats()`
-calcula "el perfil en números" (años de experiencia, cantidad de proyectos, tecnologías
-distintas, cursos/certificaciones, títulos formales, empresas) a partir de las
-colecciones de arriba. Es una única fuente de verdad consumida por **tres** lugares:
-la home pública, el dashboard admin, y la tool MCP `get_portfolio_stats` — así el
-visitante (vista tradicional o chat) y el admin siempre ven el mismo número.
+| Tool                  | Qué hace                                                             | ¿Chat público? |
+| ---------------------- | ---------------------------------------------------------------------- | :-------------: |
+| `get_profile_info`     | Datos generales del perfil (bio, contacto, hobbies, idiomas)          | ✅               |
+| `get_experience`       | Historial laboral, con años totales por tecnología                    | ✅               |
+| `get_education`        | Estudios, certificaciones y cursos                                    | ✅               |
+| `get_projects`         | Lista o detalle de proyectos, con filtros                             | ✅               |
+| `get_skills`           | Habilidades técnicas/blandas                                          | ✅               |
+| `get_gallery`          | Fotos de eventos, charlas, etc.                                       | ✅               |
+| `get_references`       | Testimonios publicados                                                | ✅               |
+| `get_services`         | Servicios profesionales ofrecidos                                     | ✅               |
+| `get_portfolio_stats`  | Métricas agregadas ("el perfil en números")                           | ✅               |
+| `get_blogs`            | Lecturas curadas ya revisadas                                         | ✅               |
+| `get_full_profile`     | Perfil completo en una sola llamada + preferencias privadas           | ❌ solo integraciones propias (Claude, n8n) |
+| `create_blog`          | Registra un artículo nuevo como borrador (`reviewed: false`)          | ❌ solo automatización n8n |
 
-## 4. Tools del servidor MCP
-
-Definidas en `apps/mcp-server/src/tools/`, registradas en `tools/index.ts`:
-
-- `get_profile_info` — datos generales del perfil.
-- `get_experience(technology?, limit?)` — experiencia laboral; si se filtra por
-  tecnología, calcula además los años totales trabajados con ella.
-- `get_education(type?)` — estudios/certificaciones/cursos.
-- `get_projects(technology?, featured?, slug?, limit?)` — lista o detalle de proyectos.
-- `get_skills(category?, minProficiency?)` — habilidades.
-- `get_gallery(tag?, limit?)` — fotos.
-- `get_references()` — testimonios publicados.
-- `get_portfolio_stats()` — métricas agregadas (años de experiencia, cantidad de
-  proyectos, tecnologías distintas, cursos/certificaciones, títulos, empresas). Evita
-  que el modelo tenga que contar manualmente los resultados de otras tools cuando
-  preguntan algo como "¿cuántos proyectos tienes en total?".
-
-Cada tool: valida sus argumentos con `zod`, consulta Mongoose, y devuelve JSON plano que
-el LLM interpreta y redacta en lenguaje natural. La **descripción** de cada tool es lo
-que el modelo usa para decidir cuándo invocarla — están escritas pensando en las
-preguntas típicas de un visitante.
-
-## 5. Ruta de chat (LLM + MCP)
-
-`apps/web/src/app/api/chat/route.ts`:
-
-1. Valida el body (`sessionId`, `message`, `history`) con `zod`.
-2. Construye el `system prompt` con los datos de `Profile` (incluye `aiPersona`) y reglas
-   estrictas de "no inventar datos".
-3. Llama a `runChatTurn()` (`apps/web/src/lib/llm.ts`), que:
-   - obtiene las tools disponibles del MCP server (`listMcpTools`),
-   - las registra como `functionDeclarations` de un modelo Gemini (`genAI.getGenerativeModel`),
-   - si la respuesta trae `functionCalls()`, ejecuta `callMcpTool()` contra el MCP server
-     y devuelve el resultado como `functionResponse` en el siguiente turno del chat,
-   - repite hasta obtener texto final (máx. 6 turnos).
-4. Cada tool ejecutada se emite como evento `status` por un stream SSE; el texto final se
-   emite como evento `final`.
-5. Al terminar, persiste `ChatLog` y `AnalyticsEvent` (`type: "chat_question"`) para
-   alimentar el módulo de analíticas del dashboard.
-
-## 6. Dashboard admin y analíticas
-
-**Quién ve qué:**
-
-- **Tú (admin, autenticado en `/admin`):** CRUD completo de las 7 colecciones editables
-  (`Perfil`, `Experiencia`, `Estudios`, `Proyectos`, `Skills`, `Galería`, `Referencias`) +
-  "el perfil en números" + analítica de tráfico/uso del chat (visitas totales, preguntas
-  al chat, proyectos más vistos, preguntas frecuentes).
-- **Un tercero (visitante, sin login):** la vista tradicional completa en `/` (todas las
-  secciones de arriba en modo lectura) **más "el perfil en números"** en la misma
-  página — son los mismos datos que ve el admin en esa sección, solo que sin las
-  métricas de tráfico interno. El chat en `/chat` puede responder las mismas preguntas
-  numéricas vía la tool `get_portfolio_stats`.
-
-**CRUD del dashboard:** cada recurso sigue el mismo patrón — API (`/api/admin/{recurso}`
-con GET/POST y `/api/admin/{recurso}/[id]` con PUT/DELETE, protegidas por
-`requireAdmin()` + `src/middleware.ts`) y UI (`components/admin/AdminCrudPage.tsx`,
-un componente genérico de tabla + formulario modal parametrizado por `FieldConfig[]`).
-`Profile` es la única excepción por ser un documento singleton: vive en
-`/api/admin/profile` (solo GET/PUT) con un formulario dedicado en `/admin/perfil`.
-
-**Tracking de analíticas:** `components/analytics/AnalyticsTracker.tsx` está montado en
-el `layout.tsx` raíz y dispara un evento `page_view` (`POST /api/analytics/track`) en
-cada navegación de la vista pública (excluye `/admin/*` para no contar tus propias
-visitas gestionando el contenido). Ese mismo `sessionId` de visitante
-(`lib/session.ts`, en `localStorage`) se reutiliza en el chat, para poder correlacionar
-qué preguntó cada visitante.
-
-**Página de detalle de proyecto** (`/proyectos/[slug]`): cada tarjeta de la sección
-"Proyectos" de la home enlaza aquí. Muestra descripción completa, imágenes, tecnologías,
-links (`liveUrl`/`repoUrl`) y estado. Al montarse dispara `ProjectViewTracker`, que
-registra un evento `project_view` con el `slug` — así `Project.viewCount` y "proyectos
-más vistos" en `/admin` reflejan tráfico real de terceros (a diferencia de la tool MCP
-`get_projects`, que deliberadamente **no** incrementa `viewCount` cuando el chat consulta
-un proyecto, para no mezclar exploraciones del LLM con vistas reales).
-
-## 7. Variables de entorno y despliegue
-
-> **Nota sobre el LLM:** el chat usa la **API de Google Gemini**, no Claude. La
-> suscripción de claude.ai (Pro/Max) y la API de Anthropic son productos y facturación
-> completamente separados — no hay forma oficial de reutilizar el pago de claude.ai para
-> llamadas programáticas. Gemini tiene una capa gratuita generosa para este caso de uso
-> (portafolio de bajo tráfico). Si más adelante quieres usar Claude vía API de pago,
-> solo hay que reemplazar `apps/web/src/lib/llm.ts` — el resto de la arquitectura (tools
-> MCP, streaming SSE, system prompt) no cambia.
-
-### 7.1 Variables de entorno
-
-**`apps/mcp-server/.env`** (ver `.env.example`):
-
-```
-PORT=4002
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/portafolio
-MCP_API_KEY=<secreto largo y aleatorio>
-```
-
-**`apps/web/.env.local`** (ver `.env.example`):
-
-```
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/portafolio
-GEMINI_API_KEY=xxxxxxxxxxxxxxxx
-GEMINI_MODEL=gemini-2.0-flash
-MCP_SERVER_URL=http://localhost:4002/mcp
-MCP_API_KEY=<el mismo secreto que en mcp-server>
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=<generar con: openssl rand -base64 32>
-```
-
-Para obtener `GEMINI_API_KEY` (gratis): entra a
-[aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) con tu cuenta de
-Google, crea una API key nueva y pégala en `apps/web/.env.local`.
-
-### 7.2 Puesta en marcha local, paso a paso
+## 🚀 Cómo correrlo en local
 
 ```bash
 # 1. Instalar dependencias de todo el monorepo
@@ -319,7 +265,7 @@ npm install
 
 # 2. Copiar los .env.example y completar los valores reales
 cp apps/mcp-server/.env.example apps/mcp-server/.env
-cp apps/web/.env.example apps/web/.env.local
+cp apps/web/.env.example apps/web/.env
 
 # 3. Compilar el paquete de modelos compartidos
 npm run build:models
@@ -337,22 +283,28 @@ npm run dev:mcp
 npm run dev:web
 ```
 
-Abre `http://localhost:3000` (sitio público), `http://localhost:3000/chat` (chatbot) y
+Abrí `http://localhost:3000` (sitio público), `http://localhost:3000/chat` (chatbot) y
 `http://localhost:3000/admin/login` (dashboard).
 
-### 7.3 Despliegue en producción
+Todas las variables de entorno, con explicación de dónde conseguir cada key, están
+documentadas en `apps/web/.env.example` y `apps/mcp-server/.env.example`. Casi todo salvo
+`MONGODB_URI`, `GEMINI_API_KEY` y `MCP_API_KEY`/`MCP_SERVER_URL` es opcional — el sitio
+funciona igual sin Resend, Telegram, PostHog o los proveedores de LLM de respaldo, solo
+con menos funcionalidades.
 
-1. **MongoDB**: crea un cluster en MongoDB Atlas, habilita acceso por IP/VPC peering
-   desde donde despliegues el MCP server, y copia el `MONGODB_URI`.
-2. **`apps/mcp-server`**: despliega como servicio Node.js persistente (Railway, Render,
-   Fly.io, un VPS con PM2, o un contenedor en tu nube preferida). Expón solo el puerto
-   necesario y **restringe el acceso** (firewall/VPC) para que únicamente `apps/web`
-   pueda llegar a él — la API key es defensa en profundidad, no el único control.
-3. **`apps/web`**: despliega en Vercel (recomendado para Next.js) o cualquier host que
-   soporte Route Handlers en runtime Node.js (el chat usa `runtime = "nodejs"`, no Edge,
-   por el SDK de Anthropic y el cliente MCP). Configura ahí las variables de entorno de
-   `6.1`, apuntando `MCP_SERVER_URL` a la URL pública/interna del servidor MCP desplegado.
-4. **NextAuth**: en producción, `NEXTAUTH_URL` debe ser el dominio real (`https://...`) y
-   `NEXTAUTH_SECRET` un valor distinto al de desarrollo.
-5. Corre `create-admin` una vez contra la base de datos de producción para crear tu
-   usuario del dashboard.
+> **Nota sobre el LLM:** el chat usa las **APIs** de Google Gemini / OpenRouter / Groq,
+> no la suscripción de claude.ai. Son productos y facturación completamente separados.
+
+## ☁️ Despliegue
+
+- **`apps/mcp-server`**: servicio Node.js persistente (acá corre en Render) — necesita
+  ser un proceso de larga vida, no serverless, porque el rate limiter y el cache de
+  tools viven en memoria. Restringí el acceso de red a que solo `apps/web` pueda
+  llegarle; la API key es defensa en profundidad, no el único control.
+- **`apps/web`**: Vercel (Route Handlers en runtime Node.js, no Edge — lo necesitan los
+  SDKs de IA y el cliente MCP).
+- **MongoDB**: Atlas.
+
+## 👤 Autor
+
+**Neider Julian Urbano Bastilla** — Ingeniero de Sistemas, Full Stack (IA & MERN).
