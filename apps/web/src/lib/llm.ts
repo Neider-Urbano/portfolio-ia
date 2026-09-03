@@ -129,11 +129,23 @@ interface TurnParams {
 // ver getFullProfileTool en apps/mcp-server); si se la mandáramos al LLM
 // como función disponible, un visitante podría lograr que la llame con solo
 // pedírselo, sin importar lo que diga el system prompt — la única barrera
-// real es que el modelo ni siquiera sepa que la tool existe. create_blog es
-// la única tool de ESCRITURA del servidor (la usa una automatización de
-// n8n para registrar artículos) — un visitante jamás debe poder crear
-// contenido en la base con solo pedírselo al chat.
-const PUBLIC_CHAT_EXCLUDED_TOOLS = new Set(["get_full_profile", "create_blog"]);
+// real es que el modelo ni siquiera sepa que la tool existe. Todas las
+// demás acá son tools de ESCRITURA (crean contenido en la base: blogs,
+// proyectos, skills, experiencia, estudios, referencias, servicios) —
+// pensadas para que el propio dueño se las pida a un cliente MCP personal
+// (Claude, n8n), nunca para que un visitante cree contenido con solo
+// pedírselo al chat público. CUALQUIER tool nueva que escriba en la base
+// tiene que sumarse acá también — no es opcional.
+const PUBLIC_CHAT_EXCLUDED_TOOLS = new Set([
+  "get_full_profile",
+  "create_blog",
+  "create_project",
+  "create_skill",
+  "create_experience",
+  "create_education",
+  "create_reference",
+  "create_service",
+]);
 
 export async function* runChatTurn(params: TurnParams): AsyncGenerator<ChatEvent> {
   const mcpTools = (await listMcpTools()).filter((t) => !PUBLIC_CHAT_EXCLUDED_TOOLS.has(t.name));

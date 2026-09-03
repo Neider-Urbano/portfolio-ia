@@ -261,6 +261,7 @@ Todos los schemas están en `packages/models/src/*.ts`:
 | `get_blogs`            | Lecturas curadas ya revisadas                                         | ✅               |
 | `get_full_profile`     | Perfil completo en una sola llamada + preferencias privadas           | ❌ solo integraciones propias (Claude, n8n) |
 | `create_blog`          | Registra un artículo nuevo como borrador (`reviewed: false`)          | ❌ solo automatización n8n |
+| `create_project` / `create_skill` / `create_experience` / `create_education` / `create_reference` / `create_service` | Crean contenido y lo publican de inmediato — igual que usar el formulario del admin | ❌ solo integraciones propias (Claude, n8n) |
 
 ## 🚀 Cómo correrlo en local
 
