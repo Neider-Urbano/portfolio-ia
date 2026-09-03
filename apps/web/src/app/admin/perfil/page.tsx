@@ -12,12 +12,14 @@ interface ProfileFormState {
   email: string;
   phone: string;
   yearsOfExperience: string;
-  resumeUrl: string;
   aiPersona: string;
   socialLinksText: string; // "github:https://... , linkedin:https://..."
   birthDate: string;
   hobbiesText: string; // "fotografía, ajedrez, senderismo"
   languagesText: string; // "Español (nativo), Inglés (intermedio)"
+  sex: string;
+  documentType: string;
+  documentNumber: string;
 }
 
 const emptyState: ProfileFormState = {
@@ -29,13 +31,25 @@ const emptyState: ProfileFormState = {
   email: "",
   phone: "",
   yearsOfExperience: "0",
-  resumeUrl: "",
   aiPersona: "",
   socialLinksText: "",
   birthDate: "",
   hobbiesText: "",
   languagesText: "",
+  sex: "",
+  documentType: "",
+  documentNumber: "",
 };
+
+const SEX_OPTIONS = ["", "Hombre", "Mujer", "Otro"];
+const DOCUMENT_TYPE_OPTIONS = [
+  "",
+  "Cédula de ciudadanía",
+  "Cédula de extranjería",
+  "Tarjeta de identidad",
+  "Pasaporte",
+  "Otro",
+];
 
 const inputClass =
   "w-full rounded-sm border border-line bg-console px-3 py-2 text-sm text-ink outline-none focus:border-signal";
@@ -60,7 +74,6 @@ export default function AdminProfilePage() {
           email: p.email ?? "",
           phone: p.phone ?? "",
           yearsOfExperience: String(p.yearsOfExperience ?? 0),
-          resumeUrl: p.resumeUrl ?? "",
           aiPersona: p.aiPersona ?? "",
           socialLinksText: (p.socialLinks ?? [])
             .map((s: { platform: string; url: string }) => `${s.platform}:${s.url}`)
@@ -68,6 +81,9 @@ export default function AdminProfilePage() {
           birthDate: p.birthDate ? String(p.birthDate).slice(0, 10) : "",
           hobbiesText: (p.hobbies ?? []).join(", "),
           languagesText: (p.languages ?? []).join(", "),
+          sex: p.sex ?? "",
+          documentType: p.documentType ?? "",
+          documentNumber: p.documentNumber ?? "",
         });
       }
       setLoading(false);
@@ -110,12 +126,14 @@ export default function AdminProfilePage() {
       email: form.email,
       phone: form.phone,
       yearsOfExperience: Number(form.yearsOfExperience) || 0,
-      resumeUrl: form.resumeUrl,
       aiPersona: form.aiPersona,
       socialLinks,
       birthDate: form.birthDate || "",
       hobbies,
       languages,
+      sex: form.sex,
+      documentType: form.documentType,
+      documentNumber: form.documentNumber,
     };
 
     const res = await fetch("/api/admin/profile", {
@@ -245,22 +263,38 @@ export default function AdminProfilePage() {
           />
         </Field>
 
-        <Field label="URL del CV/resume (esto es lo que descargan los visitantes del sitio)">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Sexo">
+            <select value={form.sex} onChange={(e) => handleChange("sex", e.target.value)} className={inputClass}>
+              {SEX_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt || "— sin especificar —"}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Tipo de documento">
+            <select
+              value={form.documentType}
+              onChange={(e) => handleChange("documentType", e.target.value)}
+              className={inputClass}
+            >
+              {DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt || "— sin especificar —"}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Número de documento (privado, no se muestra en la home ni en el chat público)">
           <input
-            value={form.resumeUrl}
-            onChange={(e) => handleChange("resumeUrl", e.target.value)}
+            value={form.documentNumber}
+            onChange={(e) => handleChange("documentNumber", e.target.value)}
             className={inputClass}
           />
         </Field>
-
-        <a
-          href="/cv"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-signal hover:underline"
-        >
-          Ver mi CV generado en HTML (con foto) para imprimir/guardar como PDF ↗
-        </a>
 
         <Field label="Enlaces sociales (formato: plataforma:url, separados por coma)">
           <input

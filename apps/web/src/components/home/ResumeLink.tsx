@@ -1,13 +1,16 @@
 "use client";
 
 import { getSessionId } from "@/lib/session";
+import { toDriveDirectDownloadUrl } from "@/lib/drive";
 
 /**
- * El "Ver CV" que ve un visitante normal abre directo el archivo que el
- * dueño pegó en Profile.resumeUrl (no la versión HTML generada en /cv, que
- * es una herramienta para uso del propio dueño — ver /admin/perfil).
+ * El "Ver CV" que ve un visitante normal abre directo el link que el dueño
+ * cargó en /admin/documentos (kind:"hoja_vida", isPublic:true) — no la
+ * versión HTML generada en /cv, que es una herramienta para uso del propio
+ * dueño (ver /admin/perfil). Si hay más de una hoja de vida (ej. ES/EN), la
+ * home renderiza un ResumeLink por cada una con su propio label.
  */
-export function ResumeLink({ href }: { href: string }) {
+export function ResumeLink({ href, label = "Ver CV" }: { href: string; label?: string }) {
   const handleClick = () => {
     const sessionId = getSessionId();
     if (!sessionId) return;
@@ -20,13 +23,13 @@ export function ResumeLink({ href }: { href: string }) {
 
   return (
     <a
-      href={href}
+      href={toDriveDirectDownloadUrl(href)}
       target="_blank"
       rel="noreferrer"
       onClick={handleClick}
       className="rounded-full border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink-muted transition-colors hover:border-signal hover:text-signal"
     >
-      Ver CV
+      {label}
     </a>
   );
 }

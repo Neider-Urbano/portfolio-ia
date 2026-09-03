@@ -10,11 +10,16 @@ export interface IProfile extends Document {
   phone?: string;
   yearsOfExperience: number;
   socialLinks: { platform: string; url: string }[];
-  resumeUrl?: string;
   aiPersona?: string; // instrucciones de tono/estilo que el LLM debe usar al "ser" este perfil
   birthDate?: Date; // privado: solo se expone la edad calculada, nunca esta fecha
   hobbies: string[];
   languages: string[]; // ej. "Español (nativo)", "Inglés (intermedio)" — público, mismo patrón que hobbies
+  // Privados, igual que birthDate: nunca deben salir de getFullProfile()/get_profile_info
+  // ni de ningún otro camino público. Viven acá (no en Preference) porque, a diferencia
+  // de las preferencias personales, se editan desde la misma pantalla /admin/perfil.
+  sex?: string;
+  documentType?: string;
+  documentNumber?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,11 +41,13 @@ const ProfileSchema = new Schema<IProfile>(
         url: { type: String, required: true },
       },
     ],
-    resumeUrl: String,
     aiPersona: String,
     birthDate: Date,
     hobbies: [{ type: String }],
     languages: [{ type: String }],
+    sex: String,
+    documentType: String,
+    documentNumber: String,
   },
   { timestamps: true }
 );

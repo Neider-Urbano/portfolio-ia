@@ -6,6 +6,7 @@ import Project from "./Project";
 import Service from "./Service";
 import Reference from "./Reference";
 import GalleryItem from "./GalleryItem";
+import DocumentItem from "./DocumentItem";
 import { calculateAge } from "./stats";
 
 /**
@@ -18,21 +19,30 @@ import { calculateAge } from "./stats";
  *
  * Deliberadamente excluye lo interno/privado que nunca debe salir de la
  * base: `aiPersona` (instrucciones de tono para el LLM, no un dato "sobre"
- * la persona) y `birthDate` (solo se expone la edad ya calculada). El
- * schema del proyecto no tiene ni tuvo nunca campos de contraseñas,
- * credenciales ni datos bancarios — no hay nada de eso que filtrar.
+ * la persona), `birthDate` (solo se expone la edad ya calculada) y
+ * `documentNumber` (el número de documento sí es siempre privado). `sex` y
+ * `documentType` en cambio SÍ se exponen acá — a pedido explícito del
+ * dueño no llevan el mismo tratamiento restrictivo que el número, aunque la
+ * home no los renderice en su UI.
+ * Los documentos del dueño (DocumentItem: cédula, pase de moto, etc.) tampoco
+ * salen de acá salvo la(s) hoja(s) de vida marcadas isPublic:true, que sí son
+ * parte del perfil público (reemplazan al viejo Profile.resumeUrl).
  */
 export async function getFullProfile() {
-  const [profile, experience, education, skills, projects, services, references, gallery] = await Promise.all([
-    Profile.findOne().lean(),
-    Experience.find().sort({ startDate: -1 }).lean(),
-    Education.find().sort({ startDate: -1 }).lean(),
-    Skill.find().sort({ proficiency: -1 }).lean(),
-    Project.find().sort({ featured: -1, createdAt: -1 }).lean(),
-    Service.find().sort({ order: 1 }).lean(),
-    Reference.find({ isPublished: true }).lean(),
-    GalleryItem.find().sort({ order: 1, createdAt: -1 }).lean(),
-  ]);
+  const [profile, experience, education, skills, projects, services, references, gallery, resumeDocs] =
+    await Promise.all([
+      Profile.findOne().lean(),
+      Experience.find().sort({ startDate: -1 }).lean(),
+      Education.find().sort({ startDate: -1 }).lean(),
+      Skill.find().sort({ proficiency: -1 }).lean(),
+      Project.find().sort({ featured: -1, createdAt: -1 }).lean(),
+      Service.find().sort({ order: 1 }).lean(),
+      Reference.find({ isPublished: true }).lean(),
+      GalleryItem.find().sort({ order: 1, createdAt: -1 }).lean(),
+      DocumentItem.find({ kind: "hoja_vida", isPublic: true })
+        .sort({ isPrimary: -1, language: 1 })
+        .lean(),
+    ]);
 
   if (!profile) return null;
 
@@ -50,7 +60,9 @@ export async function getFullProfile() {
       hobbies: profile.hobbies,
       languages: profile.languages,
       socialLinks: profile.socialLinks,
-      resumeUrl: profile.resumeUrl,
+      sex: profile.sex,
+      documentType: profile.documentType,
+      resumes: resumeDocs.map((d) => ({ label: d.label, url: d.url, language: d.language, isPrimary: d.isPrimary })),
     },
     experience: experience.map((e) => ({
       role: e.role,

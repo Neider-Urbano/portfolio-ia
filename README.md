@@ -38,6 +38,9 @@ del chat.
   sin gastar una llamada al LLM.
 - 📄 **CV descargable**: página HTML imprimible generada desde los propios datos del
   perfil, más un endpoint público (`GET /api/resume`) que devuelve el perfil completo.
+- 🗂️ **Documentos personales**: módulo admin para cargar hojas de vida (ES/EN),
+  cédula, u otros documentos como link (Drive, etc.) — cada uno marcado público o
+  privado; solo las hojas de vida públicas llegan a la home y al chat.
 - 📚 **Blogs curados**: lista de lecturas externas relevantes para el perfil profesional,
   con un flujo de curación (una automatización externa vía n8n registra artículos nuevos
   como borrador; el dueño los revisa y publica desde el dashboard).
@@ -191,7 +194,8 @@ portafolio/
 │           │   ├── admin/                # Dashboard: perfil, experiencia, estudios,
 │           │   │                          # proyectos, skills, galería, referencias,
 │           │   │                          # servicios, comentarios, blogs,
-│           │   │                          # preferencias (privado), seguridad (2FA)
+│           │   │                          # preferencias (privado), documentos,
+│           │   │                          # seguridad (2FA)
 │           │   └── api/
 │           │       ├── chat/route.ts             # orquesta LLM + MCP (streaming SSE)
 │           │       ├── transcribe/route.ts        # voz → texto vía Gemini
@@ -236,6 +240,7 @@ Todos los schemas están en `packages/models/src/*.ts`:
 | `Comment`         | Comentarios de visitantes (moderados antes de publicarse)                        |
 | `Blog`            | Lecturas externas curadas, con flujo de revisión (`reviewed`)                    |
 | `Preference`      | **Privado** — equipos, música, comida, estado civil, salario esperado, etc.       |
+| `DocumentItem`    | Documentos como link (CV en varios idiomas, cédula, etc.); `isPublic` decide qué llega a la home |
 | `ChatLog`         | Historial de preguntas/respuestas del chat (FAQ y auditoría)                     |
 | `AnalyticsEvent`  | `page_view`, `project_view`, `chat_question`, `resume_download`, `contact_message`|
 | `AdminUser`       | Credenciales del dashboard (bcrypt) + estado de 2FA (TOTP)                        |

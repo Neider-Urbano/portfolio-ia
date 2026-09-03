@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/admin/comentarios", label: "Comentarios" },
   { href: "/admin/blogs", label: "Blogs" },
   { href: "/admin/preferencias", label: "Preferencias" },
+  { href: "/admin/documentos", label: "Documentos" },
   { href: "/admin/seguridad", label: "Seguridad" },
 ];
 

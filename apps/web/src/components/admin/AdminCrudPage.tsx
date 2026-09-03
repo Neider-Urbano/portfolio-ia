@@ -22,6 +22,19 @@ interface AdminCrudPageProps {
   linkField?: string;
   /** Nombres de campos a mostrar en una fila de detalle expandible (además de las columnas de la tabla). */
   detailFields?: string[];
+  /**
+   * Valores fijos que se mandan siempre al crear/editar, sin ser parte del
+   * formulario — ej. { kind: "hoja_vida" } para que una instancia de esta
+   * tabla gestione solo ese subconjunto de un recurso, sin mostrarle ese
+   * campo al usuario ni dejarlo elegir otro valor.
+   */
+  fixedValues?: Record<string, any>;
+  /**
+   * Filtro client-side sobre los items ya traídos de /api/admin/{resource} —
+   * permite que dos <AdminCrudPage resource="documents" .../> en la misma
+   * página muestren cada una su propio subconjunto (ver /admin/documentos).
+   */
+  filter?: (item: Item) => boolean;
 }
 
 type Item = Record<string, any>;
@@ -83,7 +96,16 @@ function formatCell(value: unknown): string {
  * contra /api/admin/{resource} (GET/POST) y /api/admin/{resource}/[id]
  * (PUT/DELETE), que todas siguen la misma forma de respuesta { items }/{ item }.
  */
-export function AdminCrudPage({ resource, title, fields, columns, linkField, detailFields }: AdminCrudPageProps) {
+export function AdminCrudPage({
+  resource,
+  title,
+  fields,
+  columns,
+  linkField,
+  detailFields,
+  fixedValues,
+  filter,
+}: AdminCrudPageProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -97,7 +119,8 @@ export function AdminCrudPage({ resource, title, fields, columns, linkField, det
     setLoading(true);
     const res = await fetch(`/api/admin/${resource}`);
     const data = await res.json();
-    setItems(data.items ?? []);
+    const fetched: Item[] = data.items ?? [];
+    setItems(filter ? fetched.filter(filter) : fetched);
     setLoading(false);
   };
 
@@ -129,7 +152,7 @@ export function AdminCrudPage({ resource, title, fields, columns, linkField, det
     setSaving(true);
     setError(null);
 
-    const payload = buildPayload(fields, formValues);
+    const payload = { ...buildPayload(fields, formValues), ...fixedValues };
     const isEdit = !!editingItem;
     const url = isEdit ? `/api/admin/${resource}/${editingItem!._id}` : `/api/admin/${resource}`;
     const method = isEdit ? "PUT" : "POST";

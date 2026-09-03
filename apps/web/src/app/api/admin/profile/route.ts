@@ -16,11 +16,13 @@ const profileSchema = z.object({
   phone: z.string().optional().or(z.literal("")),
   yearsOfExperience: z.number().default(0),
   socialLinks: z.array(z.object({ platform: z.string(), url: z.string() })).default([]),
-  resumeUrl: z.string().optional().or(z.literal("")),
   aiPersona: z.string().optional().or(z.literal("")),
   birthDate: z.string().optional().or(z.literal("")),
   hobbies: z.array(z.string()).default([]),
   languages: z.array(z.string()).default([]),
+  sex: z.string().optional().or(z.literal("")),
+  documentType: z.string().optional().or(z.literal("")),
+  documentNumber: z.string().optional().or(z.literal("")),
 });
 
 export async function GET() {

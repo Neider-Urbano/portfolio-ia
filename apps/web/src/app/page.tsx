@@ -10,6 +10,7 @@ import {
   Reference,
   Service,
   Comment,
+  DocumentItem,
   computePortfolioStats,
   calculateAge,
 } from "@portafolio/models";
@@ -56,6 +57,7 @@ export default async function HomePage() {
     services,
     comments,
     stats,
+    resumeDocs,
   ] = await Promise.all([
     Profile.findOne().lean(),
     Project.find().sort({ featured: -1, createdAt: -1 }).limit(6).lean(),
@@ -67,6 +69,10 @@ export default async function HomePage() {
     Service.find().sort({ order: 1 }).lean(),
     Comment.find({ isApproved: true }).sort({ createdAt: -1 }).lean(),
     computePortfolioStats(),
+    // Reemplaza al viejo Profile.resumeUrl: la(s) hoja(s) de vida ahora son
+    // DocumentItem con kind:"hoja_vida" e isPublic:true (ver /admin/documentos).
+    // isPrimary primero: esa es la que se muestra como "Ver CV" sin sufijo.
+    DocumentItem.find({ kind: "hoja_vida", isPublic: true }).sort({ isPrimary: -1, language: 1 }).lean(),
   ]);
 
   const age = profile?.birthDate ? calculateAge(profile.birthDate) : null;
@@ -101,7 +107,17 @@ export default async function HomePage() {
           >
             Ver todo ↓
           </a>
-          {profile?.resumeUrl && <ResumeLink href={profile.resumeUrl} />}
+          {resumeDocs.map((doc) => (
+            <ResumeLink
+              key={String(doc._id)}
+              href={doc.url}
+              label={
+                doc.isPrimary || resumeDocs.length === 1
+                  ? "Ver CV"
+                  : `Ver CV${doc.language ? ` (${doc.language.toUpperCase()})` : ""}`
+              }
+            />
+          ))}
           <SpeakIntro name={profile?.fullName} headline={profile?.headline} bio={profile?.bio} />
         </div>
 

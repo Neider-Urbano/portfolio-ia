@@ -40,6 +40,9 @@ export type { IAnalyticsEvent, AnalyticsEventType } from "./AnalyticsEvent";
 export { default as AdminUser } from "./AdminUser";
 export type { IAdminUser } from "./AdminUser";
 
+export { default as DocumentItem } from "./DocumentItem";
+export type { IDocumentItem } from "./DocumentItem";
+
 export { computePortfolioStats, calculateAge } from "./stats";
 export type { PortfolioStats } from "./stats";
 
