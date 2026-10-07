@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import confetti from "canvas-confetti";
 import Link from "next/link";
 
 const STORAGE_KEY = "welcomed";
@@ -26,13 +25,6 @@ export function WelcomeModal({ fullName, headline }: WelcomeModalProps) {
       return;
     }
     setOpen(true);
-    confetti({
-      particleCount: 90,
-      spread: 75,
-      origin: { y: 0.35 },
-      colors: ["#8b5cf6", "#ff9166", "#f1eef7"],
-      disableForReducedMotion: true,
-    });
   }, []);
 
   useEffect(() => {

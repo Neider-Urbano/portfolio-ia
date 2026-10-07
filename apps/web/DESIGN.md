@@ -1,6 +1,6 @@
 ---
-name: Portafolio Interactivo con IA — Modo Voz
-description: El portafolio se siente como abrir un asistente de IA moderno — un orbe que respira saluda al visitante, y cada sección vive en su propia tarjeta real, nunca encerrada en una burbuja de chat.
+name: Portafolio Interactivo con IA — Nexo Dark Studio
+description: El portafolio se siente como entrar a un estudio de inteligencia personal: fondo nocturno, capas de superficie, violetas eléctricos, chispas ámbar y un orbe vivo que guía la conversación. El home persuade y el admin permite operar sin perder el carácter del producto.
 colors:
   hall-day: "hsl(260 35% 98%)"
   hall-night: "hsl(258 22% 7%)"

@@ -9,7 +9,9 @@ import { Orb } from "@/components/voice/Orb";
 const quickPrompts = ["¿Cómo responderías: cuéntame sobre ti?", "¿Por qué debería contratarte?", "Simula una entrevista técnica"];
 
 export function CareerCopilot() {
-  const { messages, status, isLoading, sendMessage } = useChat();
+  // Canal "private": el servidor exige sesión de admin y reconstruye el
+  // historial aparte del chat público (misma sessionId, otro channel).
+  const { messages, status, isLoading, sendMessage } = useChat("private");
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, status]);

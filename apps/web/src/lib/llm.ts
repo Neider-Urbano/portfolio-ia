@@ -336,6 +336,13 @@ async function* runGeminiTurn(
     outputTokens += roundOutput;
 
     if (functionCalls.length === 0) {
+      // Contenido vacío sin tools = respuesta rota del proveedor (hoy pasa
+      // con Gemini bajo demanda). Se trata como falla para que la cadena de
+      // fallback siga con el siguiente proveedor en vez de entregar un final
+      // vacío — si TODOS fallan, runChatTurn cierra con el mensaje honesto.
+      if (!streamed.trim()) {
+        throw new Error(`${GEMINI_MODEL} devolvió una respuesta vacía`);
+      }
       yield {
         type: "final",
         text: streamed,
@@ -483,6 +490,12 @@ async function* runOpenAiCompatibleTurn(
       }));
 
     if (toolCalls.length === 0) {
+      // Mismo criterio que en el bucle de Gemini: una respuesta vacía es un
+      // fallo del proveedor, no una respuesta — throw para que el siguiente
+      // respaldo de la cadena tome el turno.
+      if (!streamed.trim()) {
+        throw new Error(`${model} devolvió una respuesta vacía`);
+      }
       yield {
         type: "final",
         text: streamed,

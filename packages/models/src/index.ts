@@ -32,7 +32,7 @@ export { default as Comment } from "./Comment";
 export type { IComment } from "./Comment";
 
 export { default as ChatLog } from "./ChatLog";
-export type { IChatLog } from "./ChatLog";
+export type { IChatLog, ChatChannel } from "./ChatLog";
 
 export { default as AnalyticsEvent } from "./AnalyticsEvent";
 export type { IAnalyticsEvent, AnalyticsEventType } from "./AnalyticsEvent";

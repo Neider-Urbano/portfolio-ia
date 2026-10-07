@@ -25,6 +25,7 @@ import { CommentForm } from "@/components/home/CommentForm";
 import { ResumeLink } from "@/components/home/ResumeLink";
 import { Orb } from "@/components/voice/Orb";
 import { Waveform } from "@/components/voice/Waveform";
+import { KnowledgeSphere } from "@/components/home/KnowledgeSphere";
 import {
   IconProject,
   IconBriefcase,
@@ -78,34 +79,25 @@ export default async function HomePage() {
   const age = profile?.birthDate ? calculateAge(profile.birthDate) : null;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-16">
+    <main className="portfolio-home studio-home mx-auto max-w-4xl px-6 py-16">
       <WelcomeModal fullName={profile?.fullName} headline={profile?.headline} />
 
-      {/* ---- Hero: el único momento conversacional del home — el resto de
-          la página vive en tarjetas y grillas reales, nunca en burbujas. ---- */}
-      <section className="power-on flex flex-col items-center text-center">
-        <Orb size={84} />
-        <h1 className="mt-5 font-mono text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
-          {profile?.fullName ?? "Tu Nombre"}
-        </h1>
-        <p className="mt-1.5 text-ink-muted">{profile?.headline}</p>
-        <p className="mt-4 max-w-xl leading-relaxed text-ink-muted">{profile?.bio}</p>
+      <nav className="portfolio-nav studio-nav" aria-label="Navegación principal"><Link href="/" className="portfolio-logo">N<span>·</span>U</Link><div className="portfolio-nav-links"><a href="#proyectos">Trabajo</a><a href="#sobre-mi">Sobre mí</a><a href="#trayectoria">Trayectoria</a><Link href="/chat">Chat</Link></div><span className="portfolio-availability"><i /> disponible para colaborar</span></nav>
 
-        <Waveform className="mt-6 h-5" />
-
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+      <section className="portfolio-hero studio-hero power-on">
+        <div className="hero-copy"><p className="studio-overline">Portfolio / 2026 · Sistemas, IA & producto digital</p><h1>{profile?.fullName ?? "Tu Nombre"}</h1><p className="hero-role">{profile?.headline}</p><p className="hero-bio">{profile?.bio}</p><div className="hero-actions">
           <Link
             href="/chat"
-            className="inline-flex items-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-transform hover:-translate-y-0.5"
+            className="hero-primary"
           >
             <IconSparkle className="h-4 w-4" />
             Hablar con mi IA
           </Link>
           <a
             href="#proyectos"
-            className="rounded-full border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink-muted transition-colors hover:border-signal hover:text-signal"
+            className="hero-secondary"
           >
-            Ver todo ↓
+            Explorar el trabajo ↓
           </a>
           {resumeDocs.map((doc) => (
             <ResumeLink
@@ -118,22 +110,11 @@ export default async function HomePage() {
               }
             />
           ))}
-          <SpeakIntro name={profile?.fullName} headline={profile?.headline} bio={profile?.bio} />
-        </div>
-
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
-          <StatPill label="años exp." value={stats.yearsOfExperience} />
-          {age != null && <StatPill label="edad" value={age} />}
-          <StatPill label="proyectos" value={stats.totalProjects} />
-          <StatPill label="tecnologías" value={stats.totalTechnologies} />
-        </div>
-
-        {profile?.socialLinks && profile.socialLinks.length > 0 && (
-          <div className="mt-6">
-            <SocialLinks links={profile.socialLinks} />
-          </div>
-        )}
+          <SpeakIntro name={profile?.fullName} headline={profile?.headline} bio={profile?.bio} /></div><div className="hero-stats"><StatPill label="años exp." value={stats.yearsOfExperience} />{age != null && <StatPill label="edad" value={age} />}<StatPill label="proyectos" value={stats.totalProjects} /><StatPill label="tecnologías" value={stats.totalTechnologies} /></div>{profile?.socialLinks && profile.socialLinks.length > 0 && <SocialLinks links={profile.socialLinks} />}</div>
+        <div className="hero-scene studio-hero-scene"><KnowledgeSphere /><Waveform className="hero-waveform" /><span className="hero-scroll">desplaza <i /></span></div>
       </section>
+
+      <section id="sobre-mi" className="studio-intro"><p className="studio-label">El punto de partida</p><div><h2>Construyo productos digitales que convierten ideas complejas en experiencias <em>claras y útiles.</em></h2><p>{profile?.bio}</p></div></section>
 
       <Section id="proyectos" icon={<IconProject className="h-5 w-5" />} title="Proyectos">
         {projects.length === 0 && <EmptyCard />}
@@ -142,6 +123,10 @@ export default async function HomePage() {
             const visitUrl = p.liveUrl || p.repoUrl;
             return (
               <div key={p.slug} className="lift-hover group rounded-sm border border-line bg-panel p-4">
+                {p.images?.[0] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.images[0]} alt="" className="studio-project-image" />
+                )}
                 <div className="flex items-start justify-between gap-2">
                   <IconTile>
                     <IconProject className="h-5 w-5" />
@@ -183,7 +168,7 @@ export default async function HomePage() {
         </div>
       </Section>
 
-      <Section id="experiencia" icon={<IconBriefcase className="h-5 w-5" />} title="Experiencia">
+      <Section id="trayectoria" icon={<IconBriefcase className="h-5 w-5" />} title="Experiencia">
         {experiences.length === 0 && <EmptyCard />}
         <div className="rounded-sm border border-line bg-panel px-5">
           {experiences.map((e) => (
@@ -386,10 +371,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="mb-16 scroll-mt-20">
+    <section id={id} className="studio-section mb-16 scroll-mt-20">
       <Reveal>
-        <div className="mb-5 flex items-center gap-2.5">
-          <IconTile>{icon}</IconTile>
+        <div className="studio-section-head mb-5 flex items-center gap-2.5">
+          <span className="studio-section-mark">{icon}</span>
           <h2 className="font-mono text-lg font-bold text-ink">{title}</h2>
         </div>
         {children}

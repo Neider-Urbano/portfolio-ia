@@ -190,8 +190,8 @@ export function AdminCrudPage({
   };
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="admin-crud-page">
+      <div className="admin-page-heading mb-6 flex items-center justify-between">
         <h1 className="font-mono text-xl font-semibold text-ink">{title}</h1>
         <button
           onClick={openCreate}
@@ -206,7 +206,7 @@ export function AdminCrudPage({
       ) : items.length === 0 ? (
         <p className="font-mono text-sm text-ink-faint">Aún no hay elementos.</p>
       ) : (
-        <div className="overflow-x-auto rounded-sm border border-line">
+        <div className="admin-table-shell overflow-x-auto rounded-sm border border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-panel font-mono text-[11px] uppercase tracking-wide text-ink-faint">
               <tr>
@@ -284,7 +284,7 @@ export function AdminCrudPage({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <form
             onSubmit={handleSubmit}
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-sm border border-line bg-panel-raised p-6"
+            className="admin-modal max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-sm border border-line bg-panel-raised p-6"
           >
             <h2 className="mb-4 font-mono text-sm uppercase tracking-wide text-ink-faint">
               {editingItem ? "Editar" : "Nuevo"} · {title}

@@ -41,7 +41,7 @@ export function CommentForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-sm border border-line bg-panel p-4">
+    <form onSubmit={handleSubmit} className="comment-form space-y-3 rounded-sm border border-line bg-panel p-4">
       <p className="text-sm font-bold text-ink">Dejar un comentario</p>
 
       <input
@@ -76,7 +76,7 @@ export function CommentForm() {
       <button
         type="submit"
         disabled={sending}
-        className="rounded-full bg-signal px-4 py-2 text-sm font-bold text-on-accent transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+        className="form-submit-button rounded-full bg-signal px-4 py-2 text-sm font-bold text-on-accent transition-transform hover:-translate-y-0.5 disabled:opacity-40"
       >
         {sending ? "Enviando…" : "Enviar comentario"}
       </button>

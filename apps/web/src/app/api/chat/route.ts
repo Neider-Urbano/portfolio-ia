@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { runChatTurn } from "@/lib/llm";
+import { loadChatHistory } from "@/lib/chat-history";
+import { requireAdmin } from "@/lib/require-admin";
 import { Profile, ChatLog, AnalyticsEvent } from "@portafolio/models";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
@@ -9,18 +11,14 @@ export const runtime = "nodejs"; // necesita el SDK de Anthropic y el cliente MC
 export const maxDuration = 60; // el MCP server puede tardar en despertar (cold start) + turnos de Gemini
 
 const bodySchema = z.object({
-  sessionId: z.string().min(1),
+  sessionId: z.string().min(1).max(128),
   message: z.string().min(1).max(2000),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      }),
-    )
-    .max(20)
-    .optional()
-    .default([]),
+  // Dos chats, dos canales: el público del sitio y el copiloto privado del
+  // dueño (/admin/copiloto). El historial se reconstruye server-side
+  // (loadChatHistory) filtrando por sessionId + channel — deliberadamente NO
+  // se acepta `history` del cliente: cualquiera podría fabricar turnos de
+  // asistente y meter texto falso en el contexto del modelo.
+  channel: z.enum(["public", "private"]).default("public"),
 });
 
 async function buildSystemPrompt(): Promise<string> {
@@ -65,12 +63,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { sessionId, message, history } = parsed.data;
+  const { sessionId, message, channel } = parsed.data;
+
+  // El canal privado es solo para el dueño. /api/chat NO está bajo el matcher
+  // del middleware (lo usa el chat público), así que el gate vive acá: sin
+  // sesión de admin, el canal "private" ni se procesa ni se lee su historial.
+  if (channel === "private" && !(await requireAdmin())) {
+    return new Response(JSON.stringify({ error: "No autorizado" }), { status: 403 });
+  }
+
   await connectDB();
 
   const systemPrompt = await buildSystemPrompt();
+  const history = await loadChatHistory(sessionId, channel);
   const messages = [
-    ...history.map((h) => ({ role: h.role, content: h.content })),
+    ...history,
     { role: "user" as const, content: message },
   ];
 
@@ -111,31 +118,50 @@ export async function POST(req: NextRequest) {
             provider = event.provider;
             model = event.model;
             usage = event.usage;
-            send({ type: "final", text: event.text });
+            // Un final vacío (algún proveedor devolvió contenido vacío, p.ej.
+            // tras un 503 en cadena) no se pinta: abajo se trata como falla
+            // y se manda un error honesto — así no queda una burbuja vacía
+            // ni se persiste una respuesta en blanco en ChatLog.
+            if (event.text.trim()) send({ type: "final", text: event.text });
           }
         }
 
-        await Promise.all([
-          ChatLog.create({
-            sessionId,
-            question: message,
-            answer: finalText,
-            toolsUsed,
-            latencyMs: Date.now() - startedAt,
-            // Trazabilidad: qué proveedor/modelo respondió y cuántos tokens
-            // costó — sin esto no hay forma de ver en producción que la
-            // cadena de fallback se disparó ni de medir el gasto.
-            provider,
-            llmModel: model,
-            inputTokens: usage?.inputTokens,
-            outputTokens: usage?.outputTokens,
-          }),
-          AnalyticsEvent.create({
-            type: "chat_question",
-            sessionId,
-            metadata: { toolsUsed, provider, llmModel: model },
-          }),
-        ]);
+        if (!finalText.trim()) {
+          send({
+            type: "error",
+            message: "No pude generar una respuesta, intenta de nuevo en unos segundos.",
+          });
+        } else {
+          // La respuesta ya se le envió al usuario: si la persistencia falla
+          // (DB caída, validación), se loguea acá en vez de mandarle un error
+          // crudo por un problema que no es suyo.
+          try {
+            await Promise.all([
+              ChatLog.create({
+                sessionId,
+                channel,
+                question: message,
+                answer: finalText,
+                toolsUsed,
+                latencyMs: Date.now() - startedAt,
+                // Trazabilidad: qué proveedor/modelo respondió y cuántos tokens
+                // costó — sin esto no hay forma de ver en producción que la
+                // cadena de fallback se disparó ni de medir el gasto.
+                provider,
+                llmModel: model,
+                inputTokens: usage?.inputTokens,
+                outputTokens: usage?.outputTokens,
+              }),
+              AnalyticsEvent.create({
+                type: "chat_question",
+                sessionId,
+                metadata: { toolsUsed, provider, llmModel: model, channel },
+              }),
+            ]);
+          } catch (persistErr) {
+            console.error("[chat] no se pudo persistir el turno:", persistErr);
+          }
+        }
       } catch (err) {
         send({
           type: "error",

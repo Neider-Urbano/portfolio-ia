@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { Project } from "@portafolio/models";
 import { ProjectViewTracker } from "@/components/analytics/ProjectViewTracker";
 import { IconExternal } from "@/components/voice/icons";
+import { KnowledgeSphere } from "@/components/home/KnowledgeSphere";
 
 // Lee Mongoose directo (igual que la home): debe reflejar ediciones del
 // dashboard sin esperar a un rebuild.
@@ -32,8 +33,13 @@ export default async function ProjectDetailPage({ params }: { params: { slug: st
   if (!project) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
+    <main className="project-detail-page studio-project-page mx-auto max-w-3xl px-6 py-16">
       <ProjectViewTracker slug={project.slug} />
+
+      <nav className="studio-project-nav" aria-label="Navegación del proyecto">
+        <Link href="/" className="portfolio-logo">N<span>·</span>U</Link>
+        <div><Link href="/#proyectos">Trabajo</Link><Link href="/chat">Chat</Link></div>
+      </nav>
 
       <Link
         href="/#proyectos"
@@ -42,9 +48,9 @@ export default async function ProjectDetailPage({ params }: { params: { slug: st
         ← volver a proyectos
       </Link>
 
-      <h1 className="mt-5 font-mono text-3xl font-extrabold tracking-tight text-ink">{project.title}</h1>
+      <div className="project-detail-hero"><div className={`project-detail-visual ${project.images?.[0] ? "has-project-image" : "is-generative"}`} aria-hidden>{project.images?.[0] ? <img src={project.images[0]} alt="" /> : <KnowledgeSphere />}<div className="project-visual-overlay" /><span>LIVE SYSTEM / {String(project.viewCount).padStart(2, "0")}</span></div><div className="project-detail-copy"><p className="project-detail-kicker">Proyecto · {project.status === "completed" ? "completado" : "en construcción"}</p><h1>{project.title}</h1><p>{project.summary}</p></div></div>
 
-      <div className="mt-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+      <div className="project-meta mt-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
         <span
           className={`h-1.5 w-1.5 rounded-full ${
             project.status === "completed" ? "led-dot bg-signal" : "border border-ink-faint"
@@ -53,9 +59,7 @@ export default async function ProjectDetailPage({ params }: { params: { slug: st
         {STATUS_LABELS[project.status] ?? project.status} · {project.viewCount} vistas
       </div>
 
-      <p className="mt-3 max-w-xl leading-relaxed text-ink-muted">{project.summary}</p>
-
-      <div className="mt-4 flex flex-wrap gap-1.5">
+      <div className="project-tech mt-4 flex flex-wrap gap-1.5">
         {project.technologies.map((t: string) => (
           <span key={t} className="rounded-sm bg-console px-2 py-0.5 text-xs text-ink-muted">
             {t}
@@ -63,7 +67,7 @@ export default async function ProjectDetailPage({ params }: { params: { slug: st
         ))}
       </div>
 
-      <div className="mt-5 flex gap-4 text-sm font-semibold">
+      <div className="project-actions mt-5 flex gap-4 text-sm font-semibold">
         {project.liveUrl && (
           <a
             href={project.liveUrl}
@@ -89,7 +93,7 @@ export default async function ProjectDetailPage({ params }: { params: { slug: st
       </div>
 
       {project.images?.length > 0 && (
-        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="project-gallery mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {project.images.map((src: string) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img key={src} src={src} alt={project.title} className="w-full rounded-sm border border-line object-cover" />
@@ -97,7 +101,7 @@ export default async function ProjectDetailPage({ params }: { params: { slug: st
         </div>
       )}
 
-      <div className="mt-8 whitespace-pre-line leading-relaxed text-ink-muted">{project.description}</div>
+      <div className="project-description mt-8 whitespace-pre-line leading-relaxed text-ink-muted">{project.description}</div>
 
       <footer className="mt-14 flex items-center gap-2 border-t border-line pt-4 text-xs text-ink-faint">
         <span className="led-dot h-1.5 w-1.5 rounded-full bg-signal" aria-hidden />

@@ -28,8 +28,15 @@ export default async function AdminDashboardPage() {
   ]);
 
   return (
-    <main>
-      <h1 className="mb-8 font-mono text-xl font-semibold text-ink">Analíticas</h1>
+    <main className="admin-dashboard-page">
+      <div className="admin-dashboard-heading">
+        <div>
+          <p className="admin-dashboard-kicker">Centro de control · datos en vivo</p>
+          <h1 className="mb-2 font-mono text-xl font-semibold text-ink">Analíticas</h1>
+          <p className="admin-dashboard-lead">Una lectura rápida del portafolio público, sus proyectos y las conversaciones que están generando interés.</p>
+        </div>
+        <div className="admin-dashboard-pulse"><i /> sistema operativo</div>
+      </div>
 
       <AdminSection title="Perfil en números (público)">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

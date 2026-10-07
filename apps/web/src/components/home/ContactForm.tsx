@@ -51,7 +51,7 @@ export function ContactForm({ onSuccess }: { onSuccess?: () => void }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="contact-form space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
           value={name}
@@ -95,7 +95,7 @@ export function ContactForm({ onSuccess }: { onSuccess?: () => void }) {
       <button
         type="submit"
         disabled={sending}
-        className="rounded-full bg-signal px-4 py-2 text-sm font-bold text-on-accent transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+        className="form-submit-button rounded-full bg-signal px-4 py-2 text-sm font-bold text-on-accent transition-transform hover:-translate-y-0.5 disabled:opacity-40"
       >
         {sending ? "Enviando…" : "Enviar mensaje"}
       </button>

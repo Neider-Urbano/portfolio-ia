@@ -7,7 +7,8 @@ import { useVoiceRecorder } from "./useVoiceRecorder";
 import { Orb } from "@/components/voice/Orb";
 
 export function ChatWindow() {
-  const { messages, status, isLoading, sendMessage } = useChat();
+  // Canal "public" (default): historial server-side separado del copiloto privado.
+  const { messages, status, isLoading, sendMessage } = useChat("public");
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, status]);

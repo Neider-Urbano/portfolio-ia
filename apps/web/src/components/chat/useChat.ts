@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import type { ChatChannel } from "@portafolio/models";
 import { getSessionId } from "@/lib/session";
 import { resolveCommand, helpText } from "@/lib/chat-commands";
 
@@ -52,7 +53,7 @@ function extractImages(tool: string, data: unknown): ChatImage[] {
   return [];
 }
 
-export function useChat() {
+export function useChat(channel: ChatChannel = "public") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +89,9 @@ export function useChat() {
 
       if (!sessionIdRef.current) sessionIdRef.current = getSessionId();
 
-      const history = messages.slice(-10).map(({ role, content }) => ({ role, content }));
+      // No se manda `history`: el servidor reconstruye el historial desde
+      // ChatLog (sessionId + channel). Mandarlo desde acá sería confiar en el
+      // cliente — cualquier visitante podría fabricar turnos de asistente.
       setMessages((prev) => [...prev, { role: "user", content: text }]);
       setIsLoading(true);
       setStatus("Pensando...");
@@ -99,8 +102,23 @@ export function useChat() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: sessionIdRef.current, message: text, history }),
+          body: JSON.stringify({ sessionId: sessionIdRef.current, message: text, channel }),
         });
+
+        if (!res.ok) {
+          // 403 (canal privado sin sesión), 429 (rate limit), etc.: en el SSE
+          // nunca llega un error como tal, así que se muestra acá. Antes estas
+          // respuestas se tragaban en silencio y el chat quedaba mudo.
+          let message = "Ocurrió un error, intenta de nuevo.";
+          try {
+            const data = (await res.json()) as { error?: string };
+            if (data?.error) message = data.error;
+          } catch {
+            // cuerpo no JSON (p. ej. página de error): dejamos el genérico
+          }
+          setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+          return;
+        }
 
         if (!res.body) throw new Error("Sin respuesta del servidor");
 
@@ -167,10 +185,18 @@ export function useChat() {
               });
               setStatus(null);
             } else if (event.type === "error") {
+              // Muestra el motivo real (rate limit, proveedores caídos, etc.)
+              // en vez de un genérico que no dice nada al usuario.
               setMessages((prev) => {
                 const base =
                   prev.length > 0 && prev[prev.length - 1].pending ? prev.slice(0, -1) : prev;
-                return [...base, { role: "assistant" as const, content: "Ocurrió un error, intenta de nuevo." }];
+                return [
+                  ...base,
+                  {
+                    role: "assistant" as const,
+                    content: event.message || "Ocurrió un error, intenta de nuevo.",
+                  },
+                ];
               });
               setStatus(null);
             }
@@ -181,7 +207,7 @@ export function useChat() {
         setStatus(null);
       }
     },
-    [messages, isLoading]
+    [messages, isLoading, channel]
   );
 
   return { messages, status, isLoading, sendMessage };

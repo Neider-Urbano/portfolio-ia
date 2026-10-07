@@ -32,7 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="admin-shell flex min-h-screen">
       <aside className="w-56 shrink-0 border-r border-line bg-panel p-4">
         <p className="mb-6 px-2 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
           Panel de control

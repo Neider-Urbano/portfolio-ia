@@ -120,6 +120,12 @@ flowchart LR
 
 - El LLM **nunca inventa datos**: el `system prompt` de `/api/chat` exige usar las tools
   para cualquier afirmación factual (ver `apps/web/src/app/api/chat/route.ts`).
+- El **historial de la conversación se reconstruye server-side** (`lib/chat-history.ts`:
+  últimos 10 turnos de `ChatLog` por `sessionId` + `channel`). El body de `/api/chat`
+  ya **no acepta `history` del cliente** — cualquiera podría fabricar turnos de
+  asistente y meter texto falso en el contexto del modelo. Hay dos canales aislados:
+  el chat público (`/chat`) y el copiloto privado (`/admin/copiloto`); comparten la
+  sessionId del navegador pero nunca mezclan sus historiales.
 - El bucle agente (`apps/web/src/lib/llm.ts`) va turno a turno, con un límite de turnos
   como salvaguarda, y prueba los tres proveedores de LLM en orden ante cualquier fallo.
 - Cada tool ejecutada emite un evento `status` por streaming (SSE), que el frontend
@@ -154,6 +160,7 @@ Pensado como un sistema real, no como una demo — algunos puntos concretos:
 - **Bloqueo de cuenta** tras varios intentos de login fallidos seguidos.
 - **Sin ReDoS**: los argumentos de las tools que arman un `$regex` de MongoDB (filtros
   por tecnología, tag, etc.) se escapan antes de construir la expresión regular.- **Frontera explícita entre tools públicas y privadas del MCP server**: `get_full_profile` (perfil completo + preferencias privadas) y las 7 tools de escritura (`create_*`) nunca llegan al chat público, y ahora la restricción es **server-side**: el servidor MCP recibe dos keys con scope distinto (`MCP_API_KEY` = dueño con todo, `MCP_PUBLIC_API_KEY` = chat con solo lectura) y con la key pública **ni siquiera registra** esas tools — no se anuncian en `listTools` ni pueden invocarse. El filtro del lado del cliente (`PUBLIC_CHAT_EXCLUDED_TOOLS` en `lib/llm.ts`) queda como defensa en profundidad, no como única barrera, y nada de esto reemplaza lo que diga el prompt.
+- **Historial server-side con dos chats aislados**: `/api/chat` ignora cualquier `history` que mande el cliente y reconstruye el contexto desde `ChatLog` filtrando por `sessionId` + `channel` (los registros viejos sin `channel` se tratan como públicos). El canal `private` (copiloto del dueño) exige sesión de admin **en la propia ruta** — `/api/chat` no está bajo el matcher del middleware — así que un visitante ni puede leer ni inyectar conversaciones del copiloto.
 - El servidor MCP **nunca** se expone directo al navegador del visitante.
 
 ## 🗂️ Estructura del proyecto
@@ -237,7 +244,7 @@ Todos los schemas están en `packages/models/src/*.ts`:
 | `Blog`            | Lecturas externas curadas, con flujo de revisión (`reviewed`)                    |
 | `Preference`      | **Privado** — equipos, música, comida, estado civil, salario esperado, etc.       |
 | `DocumentItem`    | Documentos como link (CV en varios idiomas, cédula, etc.); `isPublic` decide qué llega a la home |
-| `ChatLog`         | Historial de preguntas/respuestas (FAQ, auditoría) + proveedor, modelo, tokens y latencia de cada turno |
+| `ChatLog`         | Historial de preguntas/respuestas (FAQ, auditoría) + `channel` (público/privado) + proveedor, modelo, tokens y latencia de cada turno |
 | `AnalyticsEvent`  | `page_view`, `project_view`, `chat_question`, `resume_download`, `contact_message`|
 | `AdminUser`       | Credenciales del dashboard (bcrypt) + estado de 2FA (TOTP)                        |
 
