@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Analíticas" },
@@ -25,6 +26,43 @@ const NAV_ITEMS = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Guardia de sesión en el cliente. El middleware protege los ingresos por
+  // fetch, pero tras cerrar sesión el navegador puede restaurar una página
+  // privada con el botón atrás desde el back-forward cache o desde la caché
+  // del router de Next.js, sin que el middleware vuelva a ejecutarse. Si no
+  // hay sesión activa, redirigimos al home público.
+  const reroutedRef = useRef(false);
+  const lastCheckRef = useRef(0);
+  const redirectHomeIfLoggedOut = useCallback(
+    async (force: boolean) => {
+      if (reroutedRef.current || pathname === "/admin/login") return;
+      if (!force && Date.now() - lastCheckRef.current < 2000) return;
+      lastCheckRef.current = Date.now();
+      try {
+        const session = await getSession();
+        if (!session) {
+          reroutedRef.current = true;
+          router.replace("/");
+        }
+      } catch {
+        // Ante errores de red, mantener la página actual.
+      }
+    },
+    [pathname, router],
+  );
+
+  useEffect(() => {
+    redirectHomeIfLoggedOut(false);
+  }, [pathname, redirectHomeIfLoggedOut]);
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void redirectHomeIfLoggedOut(true);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [redirectHomeIfLoggedOut]);
 
   // La página de login no lleva la barra lateral del dashboard.
   if (pathname === "/admin/login") {

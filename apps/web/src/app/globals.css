@@ -60,6 +60,23 @@ body {
   color: var(--text-primary);
 }
 
+/*
+ * El home y el detalle de proyecto viven dentro de una columna "studio" de
+ * máximo 1320px con su propio lienzo (--studio-canvas / --project-canvas).
+ * En pantallas anchas, el fondo del body asoma a los lados de esa columna y,
+ * en modo día, se ve de un blanco distinto (#f9f8fc) al lienzo (#f3f2ed).
+ * Alineamos el fondo del body con el lienzo de esas páginas para que la
+ * franja blanca desaparezca.
+ */
+:root:not([data-theme="dark"]) body {
+  background-color: #f3f2ed;
+}
+
+:root[data-theme="dark"] body,
+:root.dark body {
+  background-color: #080a0f;
+}
+
 .font-mono,
 .tabular {
   font-variant-numeric: tabular-nums;
