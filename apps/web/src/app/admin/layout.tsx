@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Analíticas" },
+  { href: "/admin/copiloto", label: "Copiloto laboral" },
   { href: "/admin/perfil", label: "Perfil" },
   { href: "/admin/experiencia", label: "Experiencia" },
   { href: "/admin/estudios", label: "Estudios" },
