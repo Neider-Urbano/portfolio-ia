@@ -6,6 +6,14 @@ export interface IChatLog extends Document {
   answer: string;
   toolsUsed: string[];
   latencyMs?: number;
+  // Trazabilidad del turno: qué proveedor/modelo respondió (deja constancia
+  // cuando la cadena de fallback se dispara) y cuántos tokens costó. El campo
+  // se llama llmModel y no `model` porque Document de mongoose ya define
+  // `model()` y la interfaz chocaría.
+  provider?: string;
+  llmModel?: string;
+  inputTokens?: number;
+  outputTokens?: number;
   createdAt: Date;
 }
 
@@ -16,6 +24,10 @@ const ChatLogSchema = new Schema<IChatLog>(
     answer: { type: String, required: true },
     toolsUsed: [{ type: String }],
     latencyMs: Number,
+    provider: String,
+    llmModel: String,
+    inputTokens: Number,
+    outputTokens: Number,
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

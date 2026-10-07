@@ -88,15 +88,29 @@ export async function POST(req: NextRequest) {
       try {
         let finalText = "";
         let toolsUsed: string[] = [];
+        let provider: string | undefined;
+        let model: string | undefined;
+        let usage: { inputTokens: number; outputTokens: number } | undefined;
 
         for await (const event of runChatTurn({ messages, systemPrompt })) {
           if (event.type === "status") {
             send({ type: "status", message: event.message });
           } else if (event.type === "tool_result") {
             send({ type: "tool_result", tool: event.tool, data: event.data });
+          } else if (event.type === "delta") {
+            // Fragmento del texto final en streaming: se reenvía tal cual para
+            // que el frontend lo vaya pintando en vivo.
+            send({ type: "delta", text: event.text });
+          } else if (event.type === "delta_reset") {
+            // Se cambió de proveedor a mitad de la respuesta: el frontend
+            // descarta lo parcial y empieza de nuevo con el nuevo intento.
+            send({ type: "delta_reset" });
           } else {
             finalText = event.text;
             toolsUsed = event.toolsUsed;
+            provider = event.provider;
+            model = event.model;
+            usage = event.usage;
             send({ type: "final", text: event.text });
           }
         }
@@ -108,11 +122,18 @@ export async function POST(req: NextRequest) {
             answer: finalText,
             toolsUsed,
             latencyMs: Date.now() - startedAt,
+            // Trazabilidad: qué proveedor/modelo respondió y cuántos tokens
+            // costó — sin esto no hay forma de ver en producción que la
+            // cadena de fallback se disparó ni de medir el gasto.
+            provider,
+            llmModel: model,
+            inputTokens: usage?.inputTokens,
+            outputTokens: usage?.outputTokens,
           }),
           AnalyticsEvent.create({
             type: "chat_question",
             sessionId,
-            metadata: { toolsUsed },
+            metadata: { toolsUsed, provider, llmModel: model },
           }),
         ]);
       } catch (err) {

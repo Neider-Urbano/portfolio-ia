@@ -13,6 +13,10 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   images?: ChatImage[];
+  // true mientras el mensaje se está construyendo con deltas en streaming —
+  // el `final` lo reemplaza por la versión completa (y un `delta_reset` lo
+  // descarta si el backend cambió de proveedor a mitad de la respuesta).
+  pending?: boolean;
 }
 
 /**
@@ -119,6 +123,27 @@ export function useChat() {
 
             if (event.type === "status") {
               setStatus(event.message);
+            } else if (event.type === "delta") {
+              // Texto en streaming: el primer delta abre un mensaje pendiente
+              // y los siguientes se van concatenando; el `final` lo cierra con
+              // el texto completo. Pintar token a token en vez de esperar el
+              // muro de texto es toda la gracia de este modo.
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant" && last.pending) {
+                  return prev.map((m, i) =>
+                    i === prev.length - 1 ? { ...m, content: m.content + event.text } : m
+                  );
+                }
+                return [...prev, { role: "assistant", content: event.text, pending: true }];
+              });
+              setStatus(null);
+            } else if (event.type === "delta_reset") {
+              // El backend falló con un proveedor y reintentó con otro: lo
+              // parcial emitido no corresponde al texto definitivo.
+              setMessages((prev) =>
+                prev.filter((m, i) => !(i === prev.length - 1 && m.role === "assistant" && m.pending))
+              );
             } else if (event.type === "tool_result") {
               // dedup por url: si el backend cambió de Gemini a Groq a mitad
               // de turno, la misma tool puede haberse ejecutado dos veces.
@@ -130,16 +155,23 @@ export function useChat() {
                 }
               }
             } else if (event.type === "final") {
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: event.text, images: pendingImages.slice(0, 8) },
-              ]);
+              // Cierra el mensaje pendiente del streaming con la versión
+              // completa (y agrega las imágenes de las tools usadas).
+              setMessages((prev) => {
+                const base =
+                  prev.length > 0 && prev[prev.length - 1].pending ? prev.slice(0, -1) : prev;
+                return [
+                  ...base,
+                  { role: "assistant" as const, content: event.text, images: pendingImages.slice(0, 8) },
+                ];
+              });
               setStatus(null);
             } else if (event.type === "error") {
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: "Ocurrió un error, intenta de nuevo." },
-              ]);
+              setMessages((prev) => {
+                const base =
+                  prev.length > 0 && prev[prev.length - 1].pending ? prev.slice(0, -1) : prev;
+                return [...base, { role: "assistant" as const, content: "Ocurrió un error, intenta de nuevo." }];
+              });
               setStatus(null);
             }
           }

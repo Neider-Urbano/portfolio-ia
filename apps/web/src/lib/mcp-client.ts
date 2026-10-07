@@ -9,7 +9,15 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
  */
 export async function withMcpClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const serverUrl = process.env.MCP_SERVER_URL;
-  const apiKey = process.env.MCP_API_KEY;
+  // El chat manda la key de scope PÚBLICO si existe: con ella el servidor MCP
+  // ni siquiera registra las tools reservadas al dueño (escritura y
+  // get_full_profile) — la verificación es server-side. Fallback a la key
+  // completa para despliegues que todavía no configuren la nueva variable
+  // (ahí el filtro de PUBLIC_CHAT_EXCLUDED_TOOLS en llm.ts sigue siendo la
+  // única barrera, como antes). Se usa `||` y no `??`: una variable definida
+  // pero vacía cuenta como no definida, para que un .env a medio cargar no
+  // rompa el chat mandando una key en blanco.
+  const apiKey = process.env.MCP_PUBLIC_API_KEY || process.env.MCP_API_KEY;
   if (!serverUrl) throw new Error("MCP_SERVER_URL no está definido");
 
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {

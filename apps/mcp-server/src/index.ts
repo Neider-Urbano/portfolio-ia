@@ -1,20 +1,38 @@
 import "dotenv/config";
-import express from "express";
 import cors from "cors";
+import express from "express";
+import { connectDB } from "./db";
+import { timingSafeEqual } from "node:crypto";
+import { registerAllTools, type McpScope } from "./tools";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { connectDB } from "./db";
-import { registerAllTools } from "./tools";
 
 const PORT = Number(process.env.PORT ?? 4002);
-const MCP_API_KEY = process.env.MCP_API_KEY; // secreto compartido con apps/web
+// Dos keys, dos scopes. La del dueño abre todo (integraciones externas:
+// Claude, n8n). La pública es la que manda el chat del sitio y solo llega a
+// las tools de lectura — ver middleware abajo. Si MCP_PUBLIC_API_KEY no está
+// definida, se conserva el comportamiento de una sola key (todo abierto para
+// la key vieja), para no romper despliegues existentes.
+const OWNER_API_KEY = process.env.MCP_API_KEY;
+const PUBLIC_API_KEY = process.env.MCP_PUBLIC_API_KEY;
 
-function buildServer(): McpServer {
+/** Comparación de secretos en tiempo constante (no filtra la key por timing). */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) {
+    timingSafeEqual(ab, ab); // mantiene el costo igual aunque largos difieran
+    return false;
+  }
+  return timingSafeEqual(ab, bb);
+}
+
+function buildServer(scope: McpScope = "owner"): McpServer {
   const server = new McpServer({
     name: "portafolio-mcp-server",
     version: "1.0.0",
   });
-  registerAllTools(server);
+  registerAllTools(server, scope);
   return server;
 }
 
@@ -25,21 +43,45 @@ async function main() {
   app.use(cors());
   app.use(express.json());
 
-  // Autenticación simple. Acepta DOS formas del mismo secreto:
+  // Autenticación con scope. Acepta DOS formas de header para la misma key:
   // - "x-mcp-api-key: <key>" — la que usa apps/web, un header custom.
   // - "Authorization: Bearer <key>" — el header estándar, para clientes
   //   como el conector remoto de Claude, cuya UI para agregar un servidor
   //   MCP suele tener un campo único de "API key"/token y arma ella misma
   //   un Authorization: Bearer, sin dar forma de elegir el nombre del
   //   header — no hay nada que "agregar" ahí salvo pegar la key.
+  // La key que matchea define el SCOPE del request (res.locals.scope): la del
+  // dueño → todas las tools; la pública → solo lectura (el server de cada
+  // request se arma con ese alcance, así que las tools reservadas ni se
+  // registran). Si no matchea ninguna, 401.
   app.use("/mcp", (req, res, next) => {
-    const bearer = req.header("authorization")?.replace(/^Bearer\s+/i, "");
-    const providedKey = req.header("x-mcp-api-key") ?? bearer;
-    if (MCP_API_KEY && providedKey !== MCP_API_KEY) {
-      res.status(401).json({ error: "No autorizado" });
+    // Sin ninguna key configurada (correr local sin .env) queda abierto, igual
+    // que siempre — en cualquier otro caso no se pasa sin key válida.
+    if (!OWNER_API_KEY && !PUBLIC_API_KEY) {
+      res.locals.scope = "owner" satisfies McpScope;
+      next();
       return;
     }
-    next();
+
+    const bearer = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+    const providedKey = req.header("x-mcp-api-key") ?? bearer;
+
+    if (providedKey && OWNER_API_KEY && safeEqual(providedKey, OWNER_API_KEY)) {
+      res.locals.scope = "owner" satisfies McpScope;
+      next();
+      return;
+    }
+    if (
+      providedKey &&
+      PUBLIC_API_KEY &&
+      safeEqual(providedKey, PUBLIC_API_KEY)
+    ) {
+      res.locals.scope = "public" satisfies McpScope;
+      next();
+      return;
+    }
+
+    res.status(401).json({ error: "No autorizado" });
   });
 
   // StreamableHTTPServerTransport exige que el cliente mande
@@ -58,7 +100,8 @@ async function main() {
   // o balanceadores sin afinidad de sesión — encaja con el uso puntual de tools
   // que hace la ruta /api/chat de Next.js en cada turno de conversación.
   app.post("/mcp", async (req, res) => {
-    const server = buildServer();
+    const scope = (res.locals.scope as McpScope | undefined) ?? "owner";
+    const server = buildServer(scope);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
@@ -87,7 +130,10 @@ async function main() {
   app.get("/mcp", (_req, res) => {
     res.status(405).json({
       jsonrpc: "2.0",
-      error: { code: -32000, message: "Method Not Allowed: this server is stateless, use POST /mcp" },
+      error: {
+        code: -32000,
+        message: "Method Not Allowed: this server is stateless, use POST /mcp",
+      },
       id: null,
     });
   });

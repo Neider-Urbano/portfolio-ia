@@ -153,11 +153,7 @@ Pensado como un sistema real, no como una demo — algunos puntos concretos:
   `/api/contact`, `/api/comments`, `/api/transcribe`) y en el login / 2FA.
 - **Bloqueo de cuenta** tras varios intentos de login fallidos seguidos.
 - **Sin ReDoS**: los argumentos de las tools que arman un `$regex` de MongoDB (filtros
-  por tecnología, tag, etc.) se escapan antes de construir la expresión regular.
-- **Frontera explícita entre tools públicas y privadas del MCP server**: `get_full_profile`
-  (perfil completo + preferencias privadas) y `create_blog` (escritura) nunca llegan al
-  chat público — se filtran del lado del cliente antes de que el LLM sepa que existen,
-  no solo se le pide "por las buenas" en el prompt que no las use.
+  por tecnología, tag, etc.) se escapan antes de construir la expresión regular.- **Frontera explícita entre tools públicas y privadas del MCP server**: `get_full_profile` (perfil completo + preferencias privadas) y las 7 tools de escritura (`create_*`) nunca llegan al chat público, y ahora la restricción es **server-side**: el servidor MCP recibe dos keys con scope distinto (`MCP_API_KEY` = dueño con todo, `MCP_PUBLIC_API_KEY` = chat con solo lectura) y con la key pública **ni siquiera registra** esas tools — no se anuncian en `listTools` ni pueden invocarse. El filtro del lado del cliente (`PUBLIC_CHAT_EXCLUDED_TOOLS` en `lib/llm.ts`) queda como defensa en profundidad, no como única barrera, y nada de esto reemplaza lo que diga el prompt.
 - El servidor MCP **nunca** se expone directo al navegador del visitante.
 
 ## 🗂️ Estructura del proyecto
@@ -241,7 +237,7 @@ Todos los schemas están en `packages/models/src/*.ts`:
 | `Blog`            | Lecturas externas curadas, con flujo de revisión (`reviewed`)                    |
 | `Preference`      | **Privado** — equipos, música, comida, estado civil, salario esperado, etc.       |
 | `DocumentItem`    | Documentos como link (CV en varios idiomas, cédula, etc.); `isPublic` decide qué llega a la home |
-| `ChatLog`         | Historial de preguntas/respuestas del chat (FAQ y auditoría)                     |
+| `ChatLog`         | Historial de preguntas/respuestas (FAQ, auditoría) + proveedor, modelo, tokens y latencia de cada turno |
 | `AnalyticsEvent`  | `page_view`, `project_view`, `chat_question`, `resume_download`, `contact_message`|
 | `AdminUser`       | Credenciales del dashboard (bcrypt) + estado de 2FA (TOTP)                        |
 
@@ -305,8 +301,10 @@ con menos funcionalidades.
 
 - **`apps/mcp-server`**: servicio Node.js persistente (acá corre en Render) — necesita
   ser un proceso de larga vida, no serverless, porque el rate limiter y el cache de
-  tools viven en memoria. Restringí el acceso de red a que solo `apps/web` pueda
-  llegarle; la API key es defensa en profundidad, no el único control.
+  tools viven en memoria. Definí `MCP_API_KEY` (dueño: Claude, n8n) y
+  `MCP_PUBLIC_API_KEY` (chat público: solo lectura) en Render **y en Vercel** con el
+  mismo valor en cada lado; restringí el acceso de red a que solo `apps/web` pueda
+  llegarle — las keys con scope son defensa en profundidad, no el único control.
 - **`apps/web`**: Vercel (Route Handlers en runtime Node.js, no Edge — lo necesitan los
   SDKs de IA y el cliente MCP).
 - **MongoDB**: Atlas.

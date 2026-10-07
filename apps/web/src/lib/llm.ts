@@ -1,6 +1,15 @@
-import { GoogleGenAI, type Content, type FunctionDeclaration, type Part } from "@google/genai";
-import OpenAI from "openai";
-import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
+import {
+  type Part,
+  GoogleGenAI,
+  type Content,
+  type FunctionCall,
+  type FunctionDeclaration,
+} from "@google/genai";
+import type {
+  ChatCompletionTool,
+  ChatCompletionMessageParam,
+} from "openai/resources/chat/completions";
+import OpenAI, { APIUserAbortError } from "openai";
 import { listMcpTools, callMcpTool } from "./mcp-client";
 
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY ?? "" });
@@ -30,9 +39,27 @@ const openrouter = process.env.OPENROUTER_API_KEY
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? "openrouter/free";
 
 const groq = process.env.GROQ_API_KEY
-  ? new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" })
+  ? new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1",
+    })
   : null;
-const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+// "openai/gpt-oss-120b" es el modelo gratuito con mejor calidad que hoy da
+// Groq (y con soporte de tools, lo único que le pedimos en este rol de
+// tercer respaldo). El slug anterior, "llama-3.3-70b-versatile", salió del
+// free tier de Groq el 16/08/2026 (verificado contra /v1/models con la key
+// del proyecto: ni aparece), así que el último eslabón de la cadena devolvía
+// "404 The model does not exist or you do not have access" y el chat caía en
+// el mensaje de error final. Alternativas gratuitas vía env var si hiciera
+// falta: "qwen/qwen3.8-27b" o "openai/gpt-oss-20b".
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+
+// Timeout por llamada al modelo: si un proveedor se cuelga (no tira error,
+// solo deja de responder), AbortSignal lo aborta y ese intento cae al
+// siguiente de la cadena en vez de comerse los 60s del maxDuration de la
+// ruta entera. Cubre cada llamada al modelo por separado (una ronda de
+// herramientas puede tardar lo suyo en total, pero una request no se cuelga).
+const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 20_000);
 
 const MAX_AGENT_TURNS = 6;
 
@@ -44,7 +71,25 @@ export interface ChatTurnMessage {
 export type ChatEvent =
   | { type: "status"; message: string; tool: string }
   | { type: "tool_result"; tool: string; data: unknown }
-  | { type: "final"; text: string; toolsUsed: string[] };
+  // Fragmento del texto final, tal como lo va emitiendo el modelo: se
+  // reenvía al frontend para pintarlo en vivo en vez de esperar a tener la
+  // respuesta completa (el `final` de cierre igual manda el texto entero).
+  | { type: "delta"; text: string }
+  // Descartá el texto parcial emitido hasta ahora: se emite cuando un
+  // proveedor falla a mitad de la respuesta y el siguiente reintenta desde
+  // cero (el frontend tira lo parcial para no duplicar texto).
+  | { type: "delta_reset" }
+  // Trazabilidad: provider/modelo/usage solo los completa el intento que
+  // respondió (runChatTurn los agrega al finalizar) — es lo que ChatLog
+  // persiste para poder auditar costos y detectar fallbacks en producción.
+  | {
+      type: "final";
+      text: string;
+      toolsUsed: string[];
+      provider?: string;
+      model?: string;
+      usage?: { inputTokens: number; outputTokens: number };
+    };
 
 const STATUS_LABELS: Record<string, string> = {
   get_profile_info: "Consultando el perfil...",
@@ -74,7 +119,8 @@ function statusLabel(toolName: string): string {
 type JsonSchema = Record<string, unknown>;
 
 function sanitizeSchema(schema: JsonSchema): JsonSchema {
-  if (!schema || typeof schema !== "object") return { type: "object", properties: {} };
+  if (!schema || typeof schema !== "object")
+    return { type: "object", properties: {} };
 
   const clean: JsonSchema = {};
   if (schema.type) clean.type = schema.type;
@@ -84,14 +130,14 @@ function sanitizeSchema(schema: JsonSchema): JsonSchema {
 
   if (schema.properties && typeof schema.properties === "object") {
     clean.properties = Object.fromEntries(
-      Object.entries(schema.properties as Record<string, JsonSchema>).map(([key, value]) => [
-        key,
-        sanitizeSchema(value),
-      ])
+      Object.entries(schema.properties as Record<string, JsonSchema>).map(
+        ([key, value]) => [key, sanitizeSchema(value)],
+      ),
     );
   }
   if (schema.items) clean.items = sanitizeSchema(schema.items as JsonSchema);
-  if (Array.isArray(schema.required) && schema.required.length > 0) clean.required = schema.required;
+  if (Array.isArray(schema.required) && schema.required.length > 0)
+    clean.required = schema.required;
 
   if (!clean.type) clean.type = "object";
   if (clean.type === "object" && !clean.properties) clean.properties = {};
@@ -147,8 +193,12 @@ const PUBLIC_CHAT_EXCLUDED_TOOLS = new Set([
   "create_service",
 ]);
 
-export async function* runChatTurn(params: TurnParams): AsyncGenerator<ChatEvent> {
-  const mcpTools = (await listMcpTools()).filter((t) => !PUBLIC_CHAT_EXCLUDED_TOOLS.has(t.name));
+export async function* runChatTurn(
+  params: TurnParams,
+): AsyncGenerator<ChatEvent> {
+  const mcpTools = (await listMcpTools()).filter(
+    (t) => !PUBLIC_CHAT_EXCLUDED_TOOLS.has(t.name),
+  );
 
   if (params.messages.length === 0) {
     yield { type: "final", text: "", toolsUsed: [] };
@@ -161,19 +211,39 @@ export async function* runChatTurn(params: TurnParams): AsyncGenerator<ChatEvent
   ];
 
   try {
-    yield* runGeminiTurn(params, mcpTools);
+    yield* withProvider(
+      runGeminiTurn(params, mcpTools),
+      "Gemini",
+      GEMINI_MODEL,
+    );
     return;
   } catch (err) {
-    console.error("[llm] Gemini falló:", err);
+    console.error(`[llm] Gemini falló${timeoutHint(err)}:`, err);
   }
 
   for (const fallback of fallbacks) {
     if (!fallback.client) continue;
+    // El intento anterior pudo dejar deltas a mitad de camino en el stream;
+    // se avisa al frontend que los descarte antes de reintentar con otro
+    // proveedor, que arma la respuesta desde cero.
+    yield { type: "delta_reset" };
     try {
-      yield* runOpenAiCompatibleTurn(fallback.client, fallback.model, params, mcpTools);
+      yield* withProvider(
+        runOpenAiCompatibleTurn(
+          fallback.client,
+          fallback.model,
+          params,
+          mcpTools,
+        ),
+        fallback.name,
+        fallback.model,
+      );
       return;
     } catch (err) {
-      console.error(`[llm] ${fallback.name} (respaldo) también falló:`, err);
+      console.error(
+        `[llm] ${fallback.name} (respaldo) también falló${timeoutHint(err)}:`,
+        err,
+      );
     }
   }
 
@@ -191,7 +261,10 @@ export async function* runChatTurn(params: TurnParams): AsyncGenerator<ChatEvent
  * texto final. El SDK envuelve las functionResponse parts en un Content de
  * rol "user" automáticamente (la API ya no acepta rol "function").
  */
-async function* runGeminiTurn(params: TurnParams, mcpTools: McpToolInfo[]): AsyncGenerator<ChatEvent> {
+async function* runGeminiTurn(
+  params: TurnParams,
+  mcpTools: McpToolInfo[],
+): AsyncGenerator<ChatEvent> {
   const functionDeclarations: FunctionDeclaration[] = mcpTools.map((t) => ({
     name: t.name,
     description: t.description ?? "",
@@ -204,26 +277,78 @@ async function* runGeminiTurn(params: TurnParams, mcpTools: McpToolInfo[]): Asyn
   }));
   const lastMessage = params.messages[params.messages.length - 1];
 
+  // La config por-request del SDK no hereda la del chat (ver SendMessageParameters
+  // en @google/genai), así que se guarda aparte y se copia en cada llamada —
+  // es donde se engancha el abortSignal del timeout.
+  const baseConfig = {
+    systemInstruction: params.systemPrompt,
+    tools:
+      functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
+  };
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     history,
-    config: {
-      systemInstruction: params.systemPrompt,
-      tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
-    },
+    config: baseConfig,
   });
 
   const toolsUsed: string[] = [];
   let pending: string | Part[] = lastMessage.content;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-    const response = await chat.sendMessage({ message: pending });
-    const functionCalls = response.functionCalls;
+    // Streaming: en vez de esperar la respuesta completa, cada chunk que
+    // llega del SDK se reenvía al frontend como evento `delta`, así el texto
+    // va apareciendo mientras el modelo lo escribe. `chunk.text` del SDK
+    // trae solo el texto de ese chunk (no el acumulado), o sea que ya es un
+    // delta directo; si el chunk trae functionCalls se acumulan para el
+    // mismo manejo de tools de siempre.
+    const stream = await chat.sendMessageStream({
+      message: pending,
+      config: {
+        ...baseConfig,
+        abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+      },
+    });
+    const functionCalls: FunctionCall[] = [];
+    let streamed = "";
+    let roundInput = 0;
+    let roundOutput = 0;
 
-    if (!functionCalls || functionCalls.length === 0) {
-      yield { type: "final", text: response.text ?? "", toolsUsed };
+    for await (const chunk of stream) {
+      const calls = chunk.functionCalls;
+      if (calls && calls.length > 0) functionCalls.push(...calls);
+      const piece = chunk.text;
+      if (piece) {
+        streamed += piece;
+        yield { type: "delta", text: piece };
+      }
+      // La metadata de uso del ÚLTIMO chunk que la trae resume la request
+      // completa de esta ronda — sumarla por chunk duplicaría contadores.
+      if (chunk.usageMetadata) {
+        roundInput = chunk.usageMetadata.promptTokenCount ?? 0;
+        roundOutput =
+          (chunk.usageMetadata.candidatesTokenCount ?? 0) +
+          (chunk.usageMetadata.thoughtsTokenCount ?? 0);
+      }
+    }
+    inputTokens += roundInput;
+    outputTokens += roundOutput;
+
+    if (functionCalls.length === 0) {
+      yield {
+        type: "final",
+        text: streamed,
+        toolsUsed,
+        usage: { inputTokens, outputTokens },
+      };
       return;
     }
+
+    // El modelo no debería mezclar texto final con tool calls en la misma
+    // respuesta, pero si ocurriera el parcial ya emitido no es la respuesta
+    // definitiva: se descarta antes de seguir con el siguiente turno.
+    if (streamed) yield { type: "delta_reset" };
 
     const functionResponseParts: Part[] = [];
     for (const call of functionCalls) {
@@ -231,11 +356,15 @@ async function* runGeminiTurn(params: TurnParams, mcpTools: McpToolInfo[]): Asyn
       toolsUsed.push(name);
       yield { type: "status", message: statusLabel(name), tool: name };
 
-      const result = await runTool(name, (call.args ?? {}) as Record<string, unknown>);
+      const result = await runTool(
+        name,
+        (call.args ?? {}) as Record<string, unknown>,
+      );
       // Se reenvía al frontend además de al modelo: permite que el chat
       // muestre imágenes reales (galería, detalle de proyecto) en vez de
       // solo la descripción en texto que redacta el LLM.
-      if (result.publish) yield { type: "tool_result", tool: name, data: result.value };
+      if (result.publish)
+        yield { type: "tool_result", tool: name, data: result.value };
 
       functionResponseParts.push({
         functionResponse: { name, response: { result: result.value } },
@@ -263,7 +392,7 @@ async function* runOpenAiCompatibleTurn(
   client: OpenAI,
   model: string,
   params: TurnParams,
-  mcpTools: McpToolInfo[]
+  mcpTools: McpToolInfo[],
 ): AsyncGenerator<ChatEvent> {
   const tools: ChatCompletionTool[] = mcpTools.map((t) => ({
     type: "function",
@@ -280,34 +409,100 @@ async function* runOpenAiCompatibleTurn(
       (m): ChatCompletionMessageParam => ({
         role: m.role === "user" ? "user" : "assistant",
         content: m.content,
-      })
+      }),
     ),
   ];
 
   const toolsUsed: string[] = [];
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-    const completion = await client.chat.completions.create({
-      model,
-      messages,
-      tools: tools.length > 0 ? tools : undefined,
-    });
+    // Streaming: mismo esquema que el bucle de Gemini — el texto sale en
+    // eventos `delta` y los tool_calls, que en streaming llegan partidos por
+    // chunk (id / nombre / argumentos en fragmentos), se re-acumulan por
+    // index para armar el mismo objeto que devolvía la llamada síncrona.
+    const stream = await client.chat.completions.create(
+      {
+        model,
+        messages,
+        tools: tools.length > 0 ? tools : undefined,
+        stream: true,
+        // Sin esto el stream no trae el resumen de tokens en el último chunk
+        // (es el dato que alimenta la trazabilidad de ChatLog).
+        stream_options: { include_usage: true },
+      },
+      { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) },
+    );
 
-    const choice = completion.choices[0]?.message;
-    const toolCalls = choice?.tool_calls;
+    const pendingCalls = new Map<
+      number,
+      { id: string; name: string; args: string }
+    >();
+    let streamed = "";
+    let roundInput = 0;
+    let roundOutput = 0;
 
-    if (!toolCalls || toolCalls.length === 0) {
-      yield { type: "final", text: choice?.content ?? "", toolsUsed };
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      const piece = delta?.content;
+      if (piece) {
+        streamed += piece;
+        yield { type: "delta", text: piece };
+      }
+      // El chunk de uso viene solo al final de la ronda (include_usage).
+      if (chunk.usage) {
+        roundInput = chunk.usage.prompt_tokens;
+        roundOutput = chunk.usage.completion_tokens;
+      }
+      for (const tc of delta?.tool_calls ?? []) {
+        // Igual que antes: solo nos interesan las tools de tipo "function"
+        // (las únicas que registramos en `tools` arriba).
+        if (tc.type && tc.type !== "function") continue;
+        const acc = pendingCalls.get(tc.index) ?? {
+          id: "",
+          name: "",
+          args: "",
+        };
+        if (tc.id) acc.id = tc.id;
+        if (tc.function?.name) acc.name += tc.function.name;
+        if (tc.function?.arguments) acc.args += tc.function.arguments;
+        pendingCalls.set(tc.index, acc);
+      }
+    }
+
+    inputTokens += roundInput;
+    outputTokens += roundOutput;
+
+    const toolCalls = [...pendingCalls.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, acc], i) => ({
+        id: acc.id || `call_${i}`,
+        type: "function" as const,
+        function: { name: acc.name, arguments: acc.args || "{}" },
+      }));
+
+    if (toolCalls.length === 0) {
+      yield {
+        type: "final",
+        text: streamed,
+        toolsUsed,
+        usage: { inputTokens, outputTokens },
+      };
       return;
     }
 
-    messages.push({ role: "assistant", content: choice.content ?? null, tool_calls: toolCalls });
+    // Igual que en el bucle de Gemini: si llegó texto junto con tool calls,
+    // el parcial emitido no es la respuesta final y se descarta.
+    if (streamed) yield { type: "delta_reset" };
+
+    messages.push({
+      role: "assistant",
+      content: streamed || null,
+      tool_calls: toolCalls,
+    });
 
     for (const call of toolCalls) {
-      // Solo registramos tools de tipo "function" (ver `tools` arriba), así
-      // que un tool_call "custom" no debería ocurrir nunca en la práctica —
-      // se filtra igual porque el SDK ahora tipa ambos como una unión.
-      if (call.type !== "function") continue;
       const name = call.function.name;
       toolsUsed.push(name);
       yield { type: "status", message: statusLabel(name), tool: name };
@@ -320,8 +515,13 @@ async function* runOpenAiCompatibleTurn(
       }
 
       const result = await runTool(name, args);
-      if (result.publish) yield { type: "tool_result", tool: name, data: result.value };
-      messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result.value) });
+      if (result.publish)
+        yield { type: "tool_result", tool: name, data: result.value };
+      messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result.value),
+      });
     }
   }
 
@@ -333,17 +533,58 @@ async function* runOpenAiCompatibleTurn(
 }
 
 /**
+ * Envuelve el intento de un proveedor para etiquetar su evento `final` con el
+ * proveedor/modelo que lo sirvió. Es la trazabilidad que después persiste la
+ * ruta /api/chat en ChatLog: sin esto, en producción no hay forma de saber
+ * que la cadena de fallback se estaba disparando (ni qué modelo respondió).
+ */
+async function* withProvider(
+  gen: AsyncGenerator<ChatEvent>,
+  provider: string,
+  model: string,
+): AsyncGenerator<ChatEvent> {
+  for await (const event of gen) {
+    yield event.type === "final" ? { ...event, provider, model } : event;
+  }
+}
+
+/** Deja claro en el log cuando un fallo fue en realidad un timeout. */
+function timeoutHint(err: unknown): string {
+  if (!(err instanceof Error)) return "";
+  // TimeoutError/AbortError vienen del AbortSignal de Gemini. El abort del
+  // SDK de OpenAI es APIUserAbortError: su .name es "Error" (solo Node lo
+  // imprime con el nombre de la clase), así que se comprueba con instanceof
+  // — el único signal que le pasamos es el del timeout, así que la etiqueta
+  // es correcta.
+  const esAbort =
+    err.name === "TimeoutError" ||
+    err.name === "AbortError" ||
+    err instanceof APIUserAbortError;
+  return esAbort
+    ? ` (timeout de ${LLM_TIMEOUT_MS}ms: se abortó la llamada al modelo)`
+    : "";
+}
+
+/**
  * Ejecuta una tool MCP y devuelve tanto el resultado (para el modelo) como
  * si debe reenviarse al frontend (`publish`: solo cuando la tool respondió
  * bien — un error de tool se le informa al modelo para que lo explique, pero
  * no tiene datos reales que mostrarle al visitante). Compartido entre los
  * tres proveedores para no duplicar el manejo de errores de tools.
  */
-async function runTool(name: string, args: Record<string, unknown>): Promise<{ value: unknown; publish: boolean }> {
+async function runTool(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<{ value: unknown; publish: boolean }> {
   try {
     const resultText = await callMcpTool(name, args);
     return { value: JSON.parse(resultText), publish: true };
   } catch (err) {
-    return { value: { error: err instanceof Error ? err.message : "Error ejecutando tool" }, publish: false };
+    return {
+      value: {
+        error: err instanceof Error ? err.message : "Error ejecutando tool",
+      },
+      publish: false,
+    };
   }
 }
