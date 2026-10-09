@@ -17,6 +17,7 @@ export default function AdminGalleryPage() {
       title="Galería de fotos"
       fields={fields}
       columns={["title", "imageUrl", "tags"]}
+      orderable
     />
   );
 }

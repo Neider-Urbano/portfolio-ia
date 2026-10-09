@@ -32,8 +32,8 @@ export async function getFullProfile() {
   const [profile, experience, education, skills, projects, services, references, gallery, resumeDocs] =
     await Promise.all([
       Profile.findOne().lean(),
-      Experience.find().sort({ startDate: -1 }).lean(),
-      Education.find().sort({ startDate: -1 }).lean(),
+      Experience.find().sort({ order: 1, startDate: -1 }).lean(),
+      Education.find().sort({ order: 1, startDate: -1 }).lean(),
       Skill.find().sort({ proficiency: -1 }).lean(),
       Project.find().sort({ featured: -1, createdAt: -1 }).lean(),
       Service.find().sort({ order: 1 }).lean(),

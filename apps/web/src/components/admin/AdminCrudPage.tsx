@@ -1,9 +1,22 @@
 "use client";
 
-import { Fragment, useEffect, useState, type FormEvent } from "react";
+import {
+  Fragment,
+  useEffect,
+  useState,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 import toast from "react-hot-toast";
 
-export type FieldType = "text" | "textarea" | "number" | "boolean" | "date" | "tags" | "select";
+export type FieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "boolean"
+  | "date"
+  | "tags"
+  | "select";
 
 export interface FieldConfig {
   name: string;
@@ -35,6 +48,13 @@ interface AdminCrudPageProps {
    * página muestren cada una su propio subconjunto (ver /admin/documentos).
    */
   filter?: (item: Item) => boolean;
+  /**
+   * Habilita el drag & drop para reordenar filas. Requiere que el recurso
+   * tenga un campo `order` y un endpoint PATCH /api/admin/{resource} que
+   * reciba { ids } (ver lib/reorder.ts). El orden queda persistido en
+   * `order[0..n]` y lo respeta /cv y /api/resume.
+   */
+  orderable?: boolean;
 }
 
 type Item = Record<string, any>;
@@ -59,7 +79,10 @@ function toFormValue(item: Item | null, field: FieldConfig): any {
   return raw ?? "";
 }
 
-function buildPayload(fields: FieldConfig[], values: Record<string, any>): Record<string, any> {
+function buildPayload(
+  fields: FieldConfig[],
+  values: Record<string, any>,
+): Record<string, any> {
   const payload: Record<string, any> = {};
   for (const field of fields) {
     const v = values[field.name];
@@ -85,7 +108,8 @@ function formatCell(value: unknown): string {
   if (value == null || value === "") return "—";
   if (typeof value === "boolean") return value ? "Sí" : "No";
   if (Array.isArray(value)) return value.join(", ");
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) return value.slice(0, 10);
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value))
+    return value.slice(0, 10);
   return String(value);
 }
 
@@ -105,6 +129,7 @@ export function AdminCrudPage({
   detailFields,
   fixedValues,
   filter,
+  orderable = false,
 }: AdminCrudPageProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +139,8 @@ export function AdminCrudPage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [reorderPending, setReorderPending] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -154,7 +181,9 @@ export function AdminCrudPage({
 
     const payload = { ...buildPayload(fields, formValues), ...fixedValues };
     const isEdit = !!editingItem;
-    const url = isEdit ? `/api/admin/${resource}/${editingItem!._id}` : `/api/admin/${resource}`;
+    const url = isEdit
+      ? `/api/admin/${resource}/${editingItem!._id}`
+      : `/api/admin/${resource}`;
     const method = isEdit ? "PUT" : "POST";
 
     const res = await fetch(url, {
@@ -167,7 +196,9 @@ export function AdminCrudPage({
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      const message = data?.error ? JSON.stringify(data.error) : "Error al guardar";
+      const message = data?.error
+        ? JSON.stringify(data.error)
+        : "Error al guardar";
       setError(message);
       toast.error(message);
       return;
@@ -179,14 +210,99 @@ export function AdminCrudPage({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este elemento? Esta acción no se puede deshacer.")) return;
-    const res = await fetch(`/api/admin/${resource}/${id}`, { method: "DELETE" });
+    if (!confirm("¿Eliminar este elemento? Esta acción no se puede deshacer."))
+      return;
+    const res = await fetch(`/api/admin/${resource}/${id}`, {
+      method: "DELETE",
+    });
     if (!res.ok) {
       toast.error("Error al eliminar");
       return;
     }
     toast.success("Eliminado");
     load();
+  };
+
+  const moveItem = (from: number, to: number) => {
+    if (from === to) return;
+    setItems((prev) => {
+      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length)
+        return prev;
+      const next = prev.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
+  const persistOrder = async () => {
+    if (reorderPending) return;
+    const ids = items.map((item) => item._id);
+    if (ids.length < 2) {
+      setDragIndex(null);
+      return;
+    }
+    setReorderPending(true);
+    try {
+      const res = await fetch(`/api/admin/${resource}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Error al guardar el orden");
+        await load();
+        return;
+      }
+      // Refleja los índices en `order` (visible como columna en servicios y
+      // galería) sin recargar, para que la tabla no quede desincronizada.
+      setItems((prev) =>
+        prev.map((item, index) => ({ ...item, order: index })),
+      );
+      toast.success("Orden guardado");
+    } catch {
+      toast.error("Error al guardar el orden");
+      await load();
+    } finally {
+      setDragIndex(null);
+      setReorderPending(false);
+    }
+  };
+
+  const handleDragStart = (
+    e: DragEvent<HTMLTableRowElement>,
+    index: number,
+  ) => {
+    if (reorderPending) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, select")) {
+      e.preventDefault();
+      return;
+    }
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLTableRowElement>, index: number) => {
+    if (dragIndex === null || reorderPending) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragIndex !== index) {
+      moveItem(dragIndex, index);
+      setDragIndex(index);
+    }
+  };
+
+  const handleDrop = (e: DragEvent<HTMLTableRowElement>) => {
+    if (dragIndex === null) return;
+    e.preventDefault();
+    persistOrder();
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
   };
 
   return (
@@ -204,12 +320,24 @@ export function AdminCrudPage({
       {loading ? (
         <p className="font-mono text-sm text-ink-faint">Cargando…</p>
       ) : items.length === 0 ? (
-        <p className="font-mono text-sm text-ink-faint">Aún no hay elementos.</p>
+        <p className="font-mono text-sm text-ink-faint">
+          Aún no hay elementos.
+        </p>
       ) : (
-        <div className="admin-table-shell overflow-x-auto rounded-sm border border-line">
+        <div
+          className={`admin-table-shell overflow-x-auto rounded-sm border border-line${dragIndex !== null ? " admin-dragging" : ""}`}
+        >
           <table className="w-full text-left text-sm">
             <thead className="bg-panel font-mono text-[11px] uppercase tracking-wide text-ink-faint">
               <tr>
+                {orderable && (
+                  <th
+                    className="w-9 px-4 py-2 font-medium text-ink-faint"
+                    title="Arrastra las filas para cambiar el orden"
+                  >
+                    ⋮⋮
+                  </th>
+                )}
                 {columns.map((c) => (
                   <th key={c} className="px-4 py-2 font-medium">
                     {fields.find((f) => f.name === c)?.label ?? c}
@@ -219,9 +347,25 @@ export function AdminCrudPage({
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <Fragment key={item._id}>
-                  <tr className="border-t border-line">
+                  <tr
+                    draggable={orderable}
+                    onDragStart={
+                      orderable ? (e) => handleDragStart(e, index) : undefined
+                    }
+                    onDragOver={
+                      orderable ? (e) => handleDragOver(e, index) : undefined
+                    }
+                    onDrop={orderable ? handleDrop : undefined}
+                    onDragEnd={orderable ? handleDragEnd : undefined}
+                    className={`border-t border-line${dragIndex === index ? " admin-row-dragging" : ""}${orderable ? " admin-row-orderable" : ""}`}
+                  >
+                    {orderable && (
+                      <td className="w-9 px-2 py-2 text-center text-ink-faint">
+                        <span className="grip-cell">⋮⋮</span>
+                      </td>
+                    )}
                     {columns.map((c) => (
                       <td key={c} className="px-4 py-2 text-ink">
                         {formatCell(item[c])}
@@ -230,7 +374,11 @@ export function AdminCrudPage({
                     <td className="space-x-3 px-4 py-2 text-right font-mono text-xs uppercase tracking-wide">
                       {detailFields && detailFields.length > 0 && (
                         <button
-                          onClick={() => setExpandedId(expandedId === item._id ? null : item._id)}
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === item._id ? null : item._id,
+                            )
+                          }
                           className="text-ink-muted hover:underline"
                         >
                           {expandedId === item._id ? "Ocultar" : "Detalle"}
@@ -246,17 +394,26 @@ export function AdminCrudPage({
                           Abrir ↗
                         </a>
                       )}
-                      <button onClick={() => openEdit(item)} className="text-signal hover:underline">
+                      <button
+                        onClick={() => openEdit(item)}
+                        className="text-signal hover:underline"
+                      >
                         Editar
                       </button>
-                      <button onClick={() => handleDelete(item._id)} className="text-ink-faint hover:underline">
+                      <button
+                        onClick={() => handleDelete(item._id)}
+                        className="text-ink-faint hover:underline"
+                      >
                         Eliminar
                       </button>
                     </td>
                   </tr>
                   {expandedId === item._id && detailFields && (
                     <tr className="border-t border-line bg-console">
-                      <td colSpan={columns.length + 1} className="px-4 py-3">
+                      <td
+                        colSpan={columns.length + (orderable ? 2 : 1)}
+                        className="px-4 py-3"
+                      >
                         <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {detailFields.map((name) => {
                             const field = fields.find((f) => f.name === name);
@@ -265,7 +422,9 @@ export function AdminCrudPage({
                                 <dt className="font-mono text-[11px] uppercase tracking-wide text-ink-faint">
                                   {field?.label ?? name}
                                 </dt>
-                                <dd className="text-sm text-ink-muted">{formatCell(item[name])}</dd>
+                                <dd className="text-sm text-ink-muted">
+                                  {formatCell(item[name])}
+                                </dd>
                               </div>
                             );
                           })}
@@ -296,12 +455,16 @@ export function AdminCrudPage({
                   key={field.name}
                   field={field}
                   value={formValues[field.name]}
-                  onChange={(v) => setFormValues((prev) => ({ ...prev, [field.name]: v }))}
+                  onChange={(v) =>
+                    setFormValues((prev) => ({ ...prev, [field.name]: v }))
+                  }
                 />
               ))}
             </div>
 
-            {error && <p className="mt-3 font-mono text-xs text-fault">{error}</p>}
+            {error && (
+              <p className="mt-3 font-mono text-xs text-fault">{error}</p>
+            )}
 
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -326,7 +489,15 @@ export function AdminCrudPage({
   );
 }
 
-function FormField({ field, value, onChange }: { field: FieldConfig; value: any; onChange: (v: any) => void }) {
+function FormField({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldConfig;
+  value: any;
+  onChange: (v: any) => void;
+}) {
   const baseInputClass =
     "w-full rounded-sm border border-line bg-console px-3 py-2 text-sm text-ink outline-none focus:border-signal";
 
@@ -357,7 +528,11 @@ function FormField({ field, value, onChange }: { field: FieldConfig; value: any;
       )}
 
       {field.type === "select" && (
-        <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={baseInputClass}>
+        <select
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          className={baseInputClass}
+        >
           {field.options?.map((opt) => (
             <option key={opt} value={opt}>
               {opt}

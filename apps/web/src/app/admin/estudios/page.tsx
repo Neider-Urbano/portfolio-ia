@@ -20,6 +20,7 @@ export default function AdminEducationPage() {
       title="Estudios y certificaciones"
       fields={fields}
       columns={["institution", "degree", "type", "startDate"]}
+      orderable
     />
   );
 }

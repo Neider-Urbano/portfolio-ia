@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/require-admin";
 import { connectDB } from "@/lib/db";
 import { Education } from "@portafolio/models";
+import { reorderResource } from "@/lib/reorder";
+import { requireAdmin } from "@/lib/require-admin";
+import { NextRequest, NextResponse } from "next/server";
 
 const educationSchema = z.object({
   institution: z.string().min(1),
@@ -18,17 +19,27 @@ const educationSchema = z.object({
 
 export async function GET() {
   await connectDB();
-  const items = await Education.find().sort({ startDate: -1 }).lean();
+  const items = await Education.find().sort({ order: 1, startDate: -1 }).lean();
   return NextResponse.json({ items });
 }
 
+export async function PATCH(req: NextRequest) {
+  return reorderResource(req, Education);
+}
+
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!(await requireAdmin()))
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const parsed = educationSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success)
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 },
+    );
 
   await connectDB();
-  const item = await Education.create(parsed.data);
+  const order = await Education.countDocuments();
+  const item = await Education.create({ ...parsed.data, order });
   return NextResponse.json({ item }, { status: 201 });
 }

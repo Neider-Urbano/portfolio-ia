@@ -14,12 +14,16 @@ export function ThemeToggle() {
   const pathname = usePathname();
   const [theme, setTheme] = useState<Theme | null>(null);
 
-  if (pathname.startsWith("/cv")) return null;
-
+  // useEffect va SIEMPRE antes de cualquier return condicional: si quedara
+  // después del `if (pathname.startsWith("/cv")) return null;`, el conteo de
+  // hooks cambiaría entre rutas y React lanzaba "Rendered more hooks than
+  // during the previous render" al navegar desde /cv hacia el inicio.
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme") as Theme | null;
     setTheme(current === "dark" ? "dark" : "light");
   }, []);
+
+  if (pathname.startsWith("/cv")) return null;
 
   const toggle = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";

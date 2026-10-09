@@ -22,6 +22,10 @@ function pickMimeType(): string | undefined {
  */
 export function useVoiceRecorder(onTranscript: (text: string) => void) {
   const [recording, setRecording] = useState(false);
+  // true entre el clic y el arranque real de la grabación (el navegador aún
+  // puede estar mostrando el diálogo de permiso). Sin esto el usuario no veía
+  // ninguna señal durante ese lapso y parecía que el botón no respondía.
+  const [starting, setStarting] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [levels, setLevels] = useState<number[]>(SILENT_LEVELS);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +70,7 @@ export function useVoiceRecorder(onTranscript: (text: string) => void) {
     pendingRef.current = true;
     cancelledRef.current = false;
     setError(null);
+    setStarting(true);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -144,6 +149,7 @@ export function useVoiceRecorder(onTranscript: (text: string) => void) {
       cleanupStream();
     } finally {
       pendingRef.current = false;
+      setStarting(false);
     }
   }, [supported, cleanupStream]);
 
@@ -160,5 +166,5 @@ export function useVoiceRecorder(onTranscript: (text: string) => void) {
     [cleanupStream]
   );
 
-  return { recording, transcribing, levels, error, supported, start, stop };
+  return { recording, starting, transcribing, levels, error, supported, start, stop };
 }

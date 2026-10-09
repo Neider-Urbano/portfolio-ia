@@ -20,6 +20,7 @@ export default function AdminExperiencePage() {
       title="Experiencia laboral"
       fields={fields}
       columns={["company", "role", "startDate", "isCurrent"]}
+      orderable
     />
   );
 }

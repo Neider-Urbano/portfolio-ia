@@ -10,6 +10,6 @@ const fields: FieldConfig[] = [
 
 export default function AdminServicesPage() {
   return (
-    <AdminCrudPage resource="services" title="Servicios" fields={fields} columns={["title", "order"]} />
+    <AdminCrudPage resource="services" title="Servicios" fields={fields} columns={["title", "order"]} orderable />
   );
 }
